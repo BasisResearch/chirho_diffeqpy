@@ -35,6 +35,13 @@ def _symbolic_forward_eval_test(f_args_kwargs):
             out_shape=py_val.shape if isinstance(py_val, np.ndarray) else tuple(),
             **kwargs
         )
+
+        # Now go through and arbitrarily change all the args and kwargs to make sure that the compiled_fn is
+        #  general wrt the inputs.
+        args = tuple(arg + 1. for arg in args)
+        kwargs = {k: v + 1. for k, v in kwargs.items()}
+
+        py_val = f_from_py(*args, **kwargs)
         jl_val = compiled_fn(*args, **kwargs)
 
         assert np.allclose(py_val, jl_val)
