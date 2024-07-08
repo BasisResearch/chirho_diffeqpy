@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from ..python_fixtures import (
     symbolic_forward_eval,
+    symbolically_compile_function,
     single_op_scalar_dunder_argskwargs_fns,
     compound_op_scalar_dunder_fns,
     single_op_scalar_ufunc_fns,

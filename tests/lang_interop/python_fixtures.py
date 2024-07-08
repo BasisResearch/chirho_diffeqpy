@@ -14,6 +14,7 @@ jl(f"include(\"{julia_fixtures_pth}\")")
 
 forward_eval = jl("forward_eval")
 symbolic_forward_eval = jl("symbolic_forward_eval")
+symbolically_compile_function = jl("symbolically_compile_function")
 
 
 # Simple functions with single operations and scalars, primarily testing that args/kwargs wrap correctly.

@@ -8,80 +8,78 @@
 # First, get the relevant packages.
 using ForwardDiff
 using Symbolics
+using SymbolicUtils
 using Base
+using PythonCall
 
 forward_eval(f, args...; kwargs...) = f(args...; kwargs...)
 forward_diff_eval(f, args...; kwargs...) = ForwardDiff.gradient(f, args...; kwargs...)
 
+function symbolically_compile_function(f, args...; kwargs...)
+    @variables args_arr_sym[1:length(args)]
+    args_sym = Symbolics.scalarize(args_arr_sym)
 
+    @variables kwargs_vals_arr_sym[1:length(kwargs)]
+    kwargs_vals_sym = Symbolics.scalarize(kwargs_vals_arr_sym)
 
-function symbolic_forward_eval(f, args...; kwargs...)
+    # Construct new dict with the same keys but now with symbolic values.
+    kwargs_keys = collect(keys(kwargs))  # also used later to ensure kwargs passed later are ordered
+    kwargs_sym = Dict([k=>v for (k, v) in zip(kwargs_keys, kwargs_vals_sym)])
 
-    # print f
-    print("f: \n")
-    print(f)
-    print("\n------------------------------------------------------\n")
+#     println("--------------------")
+#     println("args_sym: ", args_sym)
+#     println("args_sym type: ", typeof(args_sym))
+#     println("kwargs_vals_sym: ", kwargs_vals_sym)
+#     println("kwargs_vals_sym type: ", typeof(kwargs_vals_sym))
+#     println("kwargs_keys: ", kwargs_keys)
+#     println("kwargs_sym: ", kwargs_sym)
+#     println("--------------------")
 
-    # print args and kwargs
-    print("args: \n")
-    print(args)
-    print("\n------------------------------------------------------\n")
+    # Construct the symbolic representation of the function
+    expr = f(args_sym...; kwargs_sym...)
+    # If f is a python function, we'll need to unwrap the returned expression.
+    if typeof(expr) == Py
+        expr = pyconvert(Num, expr)
+    end
 
-    print("kwargs: \n")
-    print(kwargs)
-    print("\n------------------------------------------------------\n")
+#     println("--------------------")
+#     println("expr type: ", typeof(expr))
+#     println("expr: ", expr)
+#     println("--------------------")
 
-    # Create symbolic variables for args and kwargs
-    sym_args = [@variables Symbol("arg_$i")[1] for i in 1:length(args)]
+    # Generate the compiled function, passing kwargs_vals_sym as arguments.
+    sym_function = Symbolics.build_function(expr, args_arr_sym, kwargs_vals_sym)
 
-    print("sym_args: \n")
-    print(sym_args...)
-    print("\n------------------------------------------------------\n")
+#     println("--------------------")
+#     println("sym_function: ", sym_function)
+#     println("--------------------")
 
-    sym_kwargs = Dict([Symbolics.@variables Symbol("kwarg_$(k)")[1] for k in keys(kwargs)])
-
-    print("sym_kwargs: \n")
-    print(sym_kwargs...)
-    print("\n------------------------------------------------------\n")
-
-    # Build the expression using the function f
-    expr = f(sym_args..., ; (Symbol(k)=>v for (k, v) in sym_kwargs)...)
-
-    print("expr: \n")
-    print(expr)
-    print("\n------------------------------------------------------\n")
-
-    # Convert the expression to a function
-    sym_function = Symbolics.build_function(expr, sym_args..., ; [v for v in values(sym_kwargs)]...)
-
-    print("sym_function: \n")
-    print(sym_function)
-    print("\n------------------------------------------------------\n")
-
-    # Compile the function
     compiled_function = eval(sym_function)
 
-    print("compiled_function: \n")
-    print(compiled_function)
-    print("\n------------------------------------------------------\n")
+#     println("--------------------")
+#     println("compiled_function: ", compiled_function)
+#     println("--------------------")
 
-    # print args and kwargs
-    print("args: \n")
-    print(args)
-    print("\n------------------------------------------------------\n")
+    # Now, we need to return a function with signature matching that of f.
+    function resigged_f(fargs...; fkwargs...)
+        # Map the fkwargs, which may have been passed in a different order, back onto the
+        #  original passed in when the function was compiled.
+        reordered_fkwargs_vals = [fkwargs[k] for k in kwargs_keys]
 
-    print("kwargs: \n")
-    print(kwargs)
-    print("\n------------------------------------------------------\n")
+#         println("--------------------")
+#         println("fargs: ", fargs)
+#         println("fkwargs: ", fkwargs)
+#         println("reordered_fkwargs_vals: ", reordered_fkwargs_vals)
+#         println("--------------------")
 
-    # Evaluate the function with original args and kwargs
-    # result = compiled_function(args..., ; values(kwargs)...)
-    result = Base.invokelatest(compiled_function, args...; values(kwargs)...)
+        # Now we can pass the fargs and fkwargs_vals to the compiled function as regular arguments.
+        return Base.invokelatest(compiled_function, fargs, reordered_fkwargs_vals)
+    end
 
+    return resigged_f
+end
 
-    print("result: \n")
-    print(result)
-    print("\n------------------------------------------------------\n")
-
-    return result
+function symbolic_forward_eval(f, args...; kwargs...)
+    compiled_f = symbolically_compile_function(f, args...; kwargs...)
+    return compiled_f(args...; kwargs...)
 end
