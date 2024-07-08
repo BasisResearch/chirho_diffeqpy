@@ -16,6 +16,10 @@ def callable_from_julia(f, **python_to_julia_kwargs):
             **convert_julia_to_python(kwargs)
         )
 
-        return convert_python_to_julia(result, out=out, **python_to_julia_kwargs)
+        converted_result = convert_python_to_julia(result, out=out, **python_to_julia_kwargs)
+        print("-----------------")
+        print("type(converted_result):", type(converted_result))
+        print("converted_result:", converted_result)
+        return converted_result
 
     return wrapper

@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from ..python_fixtures import (
-    symbolic_forward_eval,
     symbolically_compile_function,
     single_op_scalar_dunder_argskwargs_fns,
     compound_op_scalar_dunder_fns,
@@ -21,7 +20,7 @@ import chirho_diffeqpy.lang_interop.julianumpy
 def _symbolic_forward_eval_test(f_args_kwargs):
     f, argskwargs = f_args_kwargs
 
-    f_from_jl = callable_from_julia(f, out_dtype=np.float64)
+    f_from_jl = callable_from_julia(f)
     f_from_py = f
 
     for args, kwargs in argskwargs:
@@ -30,7 +29,8 @@ def _symbolic_forward_eval_test(f_args_kwargs):
         # python in, python exec, python out
         py_val = f_from_py(*args, **kwargs)
         # python in, convert to julia, julia exec, convert back to python, python out
-        jl_val = symbolic_forward_eval(f_from_jl, *args, **kwargs)
+        compiled_fn = symbolically_compile_function(f_from_jl, *args, **kwargs)
+        jl_val = compiled_fn(*args, **kwargs)
 
         assert np.allclose(py_val, jl_val)
 

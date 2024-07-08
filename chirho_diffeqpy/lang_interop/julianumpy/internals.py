@@ -159,9 +159,9 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         return regular_array.view(_JuliaThingWrapperArray)
 
     @staticmethod
-    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, unwrap_dtype=np.object_):
+    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype=np.object_):
 
-        if out is not None and unwrap_dtype is not None:
+        if out is not None and out_dtype is not None:
             raise ValueError("Only one of out and unwrap_dtype can be specified. If you pass an out array, the dtype"
                              " of the unwrapped array will be inferred from the dtype of the out array.")
 
@@ -170,7 +170,7 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
         #  compilation for our use case.
         if out is None:
-            out = np.empty(arr.shape, dtype=unwrap_dtype)
+            out = np.empty(arr.shape, dtype=out_dtype)
 
         for idx, v in np.ndenumerate(arr):
             out[idx] = v.julia_thing

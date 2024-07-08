@@ -1,6 +1,7 @@
 from .internals import JuliaThingWrapper
 from ..ops import convert_julia_to_python
 import numpy as np
+from juliacall import ArrayValue
 
 
 @convert_julia_to_python.register
@@ -9,6 +10,11 @@ def _(v: object):
     # This could be a scalar of many different julia types, so we aren't checking for those here. Note that this
     #  passive approach will break downstream somewhere if the wrapped julia thing isn't numerical in nature.
     return JuliaThingWrapper(v)
+
+
+@convert_julia_to_python.register
+def _(v: ArrayValue):
+    return convert_julia_to_python(v.to_numpy())
 
 
 @convert_julia_to_python.register
