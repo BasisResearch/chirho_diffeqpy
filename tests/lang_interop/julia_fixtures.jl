@@ -29,7 +29,7 @@ function create_symbol(v:: Number, name:: String)
     return Symbolics.variables(name)[1]
 end
 
-function symbolically_compile_function(f, args...; kwargs...)
+function symbolically_compile_function(f, args...; out_shape::Tuple=(), kwargs...)
     args_sym = [create_symbol(a, "arg_$i") for (i, a) in enumerate(args)]
 
     kwargs_vals_sym = [create_symbol(v, "kw_$k") for (k, v) in kwargs]
@@ -46,8 +46,22 @@ function symbolically_compile_function(f, args...; kwargs...)
     println("kwargs_keys: ", kwargs_keys)
     println("kwargs_sym: ", kwargs_sym)
 
+    # Instantiate symbolic output array if we're expecting to return an array.
+    f_computes_array = length(out_shape) > 0
+    if f_computes_array
+        # TODO support other types.
+        # Note that this won't be an array of float64s, but rather an array of float64 symbols.
+        out_sym = create_symbol(zeros(Float64, out_shape), "out")
+    else
+        out_sym = nothing
+    end
+
     # Construct the symbolic representation of the function
-    expr = f(args_sym...; kwargs_sym...)
+    expr = f(args_sym...; out=out_sym, kwargs_sym...)
+
+    if f_computes_array
+        expr = out_sym
+    end
 
     println("--------------------")
     println("preconv expr type: ", typeof(expr))
@@ -74,17 +88,17 @@ function symbolically_compile_function(f, args...; kwargs...)
     println("preconv sym_function type: ", typeof(sym_function))
     println("sym_function: ", sym_function)
 
-    # If compiled function is a tuple, then the first version will allocate an array to return
-    #  while the second one will take an out. We have to use the second one because
-    #  otherwise symbolics tries to allocate a PyArray.
-    is_in_place = typeof(sym_function) <: Tuple
-    # TODO store the output shape of expr so we can allocate below.
-    in_place_shape = size(expr)
-    sym_function = is_in_place ? sym_function[2] : sym_function
-
-    println("--------------------")
-    println("is_in_place: ", is_in_place)
-    println("in_place_shape: ", in_place_shape)
+    if f_computes_array
+        # In this case, the compiled function should be a tuple, and the first version will allocate
+        #  an array to return while the second one will take an out. We're using the second in-place
+        #  version as a way to pre-specify the return types on the julia side.
+        sym_has_in_place_expr = typeof(sym_function) <: Tuple
+        # If this isn't the case, error.
+        if !sym_has_in_place_expr
+            error("Expected sym_function to be a tuple, but got: ", sym_function)
+        end
+        sym_function = sym_has_in_place_expr ? sym_function[2] : sym_function
+    end
 
     println("--------------------")
     println("sym_function type: ", typeof(sym_function))
@@ -108,8 +122,9 @@ function symbolically_compile_function(f, args...; kwargs...)
         println("reordered_fkwargs_vals: ", reordered_fkwargs_vals)
 
         # Now we can pass the fargs and fkwargs_vals to the compiled function as regular arguments.
-        if is_in_place
-            out = Array{Float64}(undef, in_place_shape...)
+        if f_computes_array
+            # TODO support other types.
+            out = Array{Float64}(undef, out_shape...)
             Base.invokelatest(compiled_function, out, fargs..., reordered_fkwargs_vals...)
             return out
         else

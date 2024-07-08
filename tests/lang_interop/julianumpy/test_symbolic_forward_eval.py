@@ -29,7 +29,7 @@ def _symbolic_forward_eval_test(f_args_kwargs):
         # python in, python exec, python out
         py_val = f_from_py(*args, **kwargs)
         # python in, convert to julia, julia exec, convert back to python, python out
-        compiled_fn = symbolically_compile_function(f_from_jl, *args, **kwargs)
+        compiled_fn = symbolically_compile_function(f_from_jl, *args, out_shape=py_val.shape, **kwargs)
         jl_val = compiled_fn(*args, **kwargs)
 
         assert np.allclose(py_val, jl_val)

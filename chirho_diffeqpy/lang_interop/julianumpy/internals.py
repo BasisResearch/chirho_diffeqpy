@@ -159,21 +159,29 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         return regular_array.view(_JuliaThingWrapperArray)
 
     @staticmethod
-    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype=np.object_):
+    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype: Optional = None):
 
         if out is not None and out_dtype is not None:
-            raise ValueError("Only one of out and unwrap_dtype can be specified. If you pass an out array, the dtype"
+            raise ValueError("Only one of out and out_dtype can be specified. If you pass an out array, the dtype"
                              " of the unwrapped array will be inferred from the dtype of the out array.")
+
+        if out is None and out_dtype is None:
+            raise ValueError("Either out or out_dtype must be specified.")
 
         # As discussed in docstring, we cannot simply vectorize a deconstructor because numpy will try to internally
         #  cast the unwrapped_julia things into an array, which fails due to introspection triggering the ndim 32 limit.
         # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
         #  compilation for our use case.
         if out is None:
+            print("making out array")
             out = np.empty(arr.shape, dtype=out_dtype)
+
+            print("out.shape", out.shape)
+            print("out.dtype", out.dtype)
 
         for idx, v in np.ndenumerate(arr):
             out[idx] = v.julia_thing
+        print("----finished----")
         return out
 
     def __repr__(self):
