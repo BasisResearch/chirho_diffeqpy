@@ -18,6 +18,7 @@ def _(thing: JuliaThingWrapper, out=None, out_dtype=None):
 
 @convert_python_to_julia.register
 def _(thing: _JuliaThingWrapperArray, out=None, out_dtype=None):
+    print("out_dtype", out_dtype)
     return JuliaThingWrapper.unwrap_array(thing, out=out, out_dtype=out_dtype)
 
 

@@ -100,8 +100,7 @@ function symbolically_compile_function(f, args...; kwargs...)
     function resigged_f(fargs...; fkwargs...)
         # Map the fkwargs, which may have been passed in a different order, back onto the
         #  original passed in when the function was compiled.
-        reordered_fkwargs_vals = [Py(fkwargs[k]) for k in kwargs_keys]
-        fargs = [Py(a) for a in fargs]
+        reordered_fkwargs_vals = [fkwargs[k] for k in kwargs_keys]
 
         println("--------------------")
         println("fargs: ", fargs)
