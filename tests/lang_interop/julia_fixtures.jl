@@ -19,10 +19,10 @@ function create_symbol(v:: Union{Array, PyArray}, name:: String)
     sym = Symbol(name)
     dims = size(v)
     slices = [1:d for d in dims]
-#     # Returns a symbolic array.
-#     return @variables $(sym)[slices...]
-    # Returns an array of symbolics.
-    return Symbolics.variables(name, slices...)
+    # Returns a symbolic array.
+    return @variables $(sym)[slices...]
+#     # Returns an array of symbolics.
+#     return Symbolics.variables(name, slices...)
 end
 
 function create_symbol(v:: Number, name:: String)
