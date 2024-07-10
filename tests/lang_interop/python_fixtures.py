@@ -221,19 +221,19 @@ single_op_scalar_ufunc_fns = [
         ((1.,), dict()),
         ((-1.,), dict()),
     )),
-    # # np.isnan  # FIXME doesn't forward properly.
+    # # np.isnan  # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
     # (np.isnan, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
     #     ((np.nan,), dict()),
     # )),
-    # # np.isinf  # FIXME doesn't forward properly.
+    # # np.isinf  # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
     # (np.isinf, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
     #     ((np.inf,), dict()),
     # )),
-    # # np.isfinite  # FIXME doesn't forward properly.
+    # # np.isfinite  # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
     # (np.isfinite, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
