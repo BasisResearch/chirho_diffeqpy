@@ -11,6 +11,8 @@ def callable_from_julia(f, **python_to_julia_kwargs):
     @wraps(f)
     def wrapper(*args, out=None, **kwargs):
 
+        print("about to convert args and kwargs")
+
         result = f(
             *convert_julia_to_python(args),
             **convert_julia_to_python(kwargs)

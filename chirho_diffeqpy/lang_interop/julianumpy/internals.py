@@ -21,6 +21,11 @@ class _DunderedJuliaThingWrapper:
     behavior. See _default_ufunc below for more details on this nuance.
     """
 
+    def __bool__(self):
+        # FIXME 18d0j1h9
+        raise NotImplementedError("Operation __bool__ is not implemented for wrapped julia types being handled"
+                                  " by the julianumpy backend.")
+
     def __init__(self, julia_thing):
         self.julia_thing = julia_thing
 
@@ -33,7 +38,7 @@ class _DunderedJuliaThingWrapper:
             '__add__',
             # FIXME 18d0j1h9 python sometimes expects not a JuliaThingWrapper from __bool__, what do e.g. julia
             #  symbolics expect?
-            '__bool__',
+            # '__bool__',
             '__ceil__',
             '__eq__',  # FIXME 18d0j1h9
             '__float__',

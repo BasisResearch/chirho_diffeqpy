@@ -221,61 +221,24 @@ single_op_scalar_ufunc_fns = [
         ((1.,), dict()),
         ((-1.,), dict()),
     )),
-    # # np.isnan  # FIXME doesn't forward properly
+    # # np.isnan  # FIXME doesn't forward properly.
     # (np.isnan, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
     #     ((np.nan,), dict()),
     # )),
-    # # np.isinf  # FIXME doesn't forward properly
+    # # np.isinf  # FIXME doesn't forward properly.
     # (np.isinf, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
     #     ((np.inf,), dict()),
     # )),
-    # # np.isfinite  # FIXME doesn't forward properly
+    # # np.isfinite  # FIXME doesn't forward properly.
     # (np.isfinite, (
     #     ((0.,), dict()),
     #     ((1.,), dict()),
     #     ((np.inf,), dict()),
     # )),
-    # # np.max  # FIXME doesn't forward properly
-    # (np.max, (
-    #     ((0., 1.), dict()),
-    #     ((1., 0.), dict()),
-    #     ((-1., 0.), dict()),
-    # )),
-    # # np.min  # FIXME doesn't forward properly
-    # (np.min, (
-    #     ((0., 1.), dict()),
-    #     ((1., 0.), dict()),
-    #     ((-1., 0.), dict()),
-    # )),
-    # # np.sum  # FIXME doesn't forward properly
-    # (np.sum, (
-    #     ((0., 1.), dict()),
-    #     ((1., 0.), dict()),
-    #     ((-1., 0.), dict()),
-    # )),
-    # # np.prod  # FIXME doesn't forward properly
-    # (np.prod, (
-    #     ((0., 1.), dict()),
-    #     ((1., 2.), dict()),
-    #     ((-1., -1.), dict()),
-    # )),
-    # # np.mean  # FIXME doesn't forward properly
-    # (np.mean, (
-    #     ((0., 1.), dict()),
-    #     ((1., 0.), dict()),
-    #     ((-1., 0.), dict()),
-    # )),
-    # # np.std  # FIXME doesn't forward properly
-    # (np.std, (
-    #     ((0., 1.), dict()),
-    #     ((1., 0.), dict()),
-    #     ((-1., 0.), dict()),
-    # )),
-    # TODO ...
 ]
 
 
@@ -311,6 +274,7 @@ def _scalar_to_array(scalar, shape):
 
 # <Elementwise Array Ops>
 def _reshape_argskwargs_elementwise(argskwargs_fns, shapes=((2,), (2, 1), (2, 2), (3, 2))):
+    # Converts the test fns/args/kwargs specified above into arrays that will op elementwise.
     for f, argskwargs in argskwargs_fns:
         new_argskwargs = []
 
@@ -323,23 +287,165 @@ def _reshape_argskwargs_elementwise(argskwargs_fns, shapes=((2,), (2, 1), (2, 2)
 
 
 # Test single operations on arrays, elementwise.
-single_op_array_elementwise_dunder_argskwargs_fns = _reshape_argskwargs_elementwise(single_op_scalar_dunder_argskwargs_fns)
+single_op_array_elementwise_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_elementwise(single_op_scalar_dunder_argskwargs_fns)
+)
 
 
 # Test compound operations on arrays, elementwise.
-compound_op_array_elementwise_dunder_argskwargs_fns = _reshape_argskwargs_elementwise(compound_op_scalar_dunder_fns)
+compound_op_array_elementwise_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_elementwise(compound_op_scalar_dunder_fns)
+)
 
 
 # Test single ufuncs on arrays, elementwise.
-single_op_array_elementwise_ufunc_argskwargs_fns = _reshape_argskwargs_elementwise(single_op_scalar_ufunc_fns)
+single_op_array_elementwise_ufunc_argskwargs_fns = list(
+    _reshape_argskwargs_elementwise(single_op_scalar_ufunc_fns)
+)
 
 
 # Test compound operations on arrays, elementwise.
-compound_op_array_elementwise_ufunc_dunder_argskwargs_fns = _reshape_argskwargs_elementwise(compound_op_scalar_ufunc_dunder_fns)
+compound_op_array_elementwise_ufunc_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_elementwise(compound_op_scalar_ufunc_dunder_fns)
+)
 # </Elementwise Array Ops>
 
-# TODO broadcasting and matrices
+
+# <Broadcasted Array Ops>
+def _set_dim_to_1(dim, shape):
+    shape = list(shape)
+    shape[dim] = 1
+    return tuple(shape)
+
+
+def _reshape_argskwargs_broadcast(argskwargs_fns):
+    # Converts the test fns/args/kwargs specified above into arrays that will broadcast.
+    for f, argskwargs in argskwargs_fns:
+        new_argskwargs = []
+
+        for args, kwargs in argskwargs:
+            num_args, num_kwargs = len(args), len(kwargs)
+            num_inputs = num_args + num_kwargs
+            if num_inputs <= 1:
+                continue
+            end_shape = tuple(range(2, num_inputs + 2))
+
+            new_args = [_scalar_to_array(arg, _set_dim_to_1(i, end_shape)) for i, arg in enumerate(args)]
+            new_kwargs = {k: _scalar_to_array(v, _set_dim_to_1(i + num_args, end_shape))
+                          for i, (k, v) in enumerate(kwargs.items())}
+
+            new_argskwargs.append((tuple(new_args), new_kwargs))
+
+        if not len(new_argskwargs):
+            continue
+
+        yield f, tuple(new_argskwargs)
+
+
+# Test single operations on arrays, broadcasted.
+single_op_array_broadcasted_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_broadcast(single_op_scalar_dunder_argskwargs_fns)
+)
+
+
+# Test compound operations on arrays, broadcasted.
+compound_op_array_broadcasted_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_broadcast(compound_op_scalar_dunder_fns)
+)
+
+
+# Test single ufuncs on arrays, broadcasted.
+single_op_array_broadcasted_ufunc_argskwargs_fns = list(
+    _reshape_argskwargs_broadcast(single_op_scalar_ufunc_fns)
+)
+
+
+# Test compound operations on arrays, broadcasted.
+compound_op_array_broadcasted_ufunc_dunder_argskwargs_fns = list(
+    _reshape_argskwargs_broadcast(compound_op_scalar_ufunc_dunder_fns)
+)
+# </Broadcasted Array Ops>
+
+# <Reduction Ops>
+
+#  array to reduce
+_a2r = np.random.randn(3, 5)
+
+reduction_op_array_fns = [
+    # # np.max # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
+    # (lambda x: np.max(x, axis=0), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.max(x, axis=(0, 1)), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.max(x, axis=None), (
+    #     ((_a2r,), dict()),
+    # )),
+    # # np.min # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
+    # (lambda x: np.min(x, axis=0), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.min(x, axis=(0, 1)), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.min(x, axis=None), (
+    #     ((_a2r,), dict()),
+    # )),
+    # np.sum
+    (lambda x: np.sum(x, axis=0), (
+        ((_a2r,), dict()),
+    )),
+    (lambda x: np.sum(x, axis=(0, 1)), (
+        ((_a2r,), dict()),
+    )),
+    (lambda x: np.sum(x, axis=None), (
+        ((_a2r,), dict()),
+    )),
+    # np.prod
+    (lambda x: np.prod(x, axis=0), (
+        ((_a2r,), dict()),
+    )),
+    (lambda x: np.prod(x, axis=(0, 1)), (
+        ((_a2r,), dict()),
+    )),
+    (lambda x: np.prod(x, axis=None), (
+        ((_a2r,), dict()),
+    )),
+    # # np.mean # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
+    # (lambda x: np.mean(x, axis=0), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.mean(x, axis=(0, 1)), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.mean(x, axis=None), (
+    #     ((_a2r,), dict()),
+    # )),
+    # # np.std # FIXME 18d0j1h9 (see tag in julianumpy.internals.)
+    # (lambda x: np.std(x, axis=0), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.std(x, axis=(0, 1)), (
+    #     ((_a2r,), dict()),
+    # )),
+    # (lambda x: np.std(x, axis=None), (
+    #     ((_a2r,), dict()),
+    # )),
+    # @ matmul operator
+    (lambda x: x @ x.T, (
+        ((_a2r,), dict()),
+    )),
+    # np.einsum
+    (lambda x: np.einsum("ij->j", x), (
+        ((_a2r,), dict()),
+    )),
+    # TODO ...
+]
+# </Reduction Ops>
 
 # TODO interop with scalars and arrays.
 
 # TODO interop with everything, scalars, arrays, ufuncs, etc.
+
+# TODO slicing.
