@@ -1,18 +1,16 @@
 import juliacall  # Must precede even indirect torch imports to prevent segfault.
 
 import logging
+from importlib import import_module
 
 import numpy as np
 import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho_diffeqpy import DiffEqPy
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.handlers import LogTrajectory
-# Unused import to register the conversion overloads.
-import chirho_diffeqpy.lang_interop.julianumpy
 
 pyro.settings.set(module_local_params=True)
 
@@ -25,7 +23,13 @@ end_time = torch.tensor(4.0)
 
 
 @pytest.mark.parametrize("solver", [DiffEqPy])
-def test_forward_correct(solver):
+@pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
+def test_forward_correct(solver, lang_interop_backend):
+
+    # This loads the conversion operation overloads for a particular backend.
+    # FIXME hk0jd16g will these overloads bleed into other tests?
+    import_module(lang_interop_backend)
+
     sp0 = dict(x=torch.tensor(10.).double(), c=torch.tensor(0.1).double())
     timespan = torch.linspace(1.0, 10., 10).double()
 
@@ -60,23 +64,26 @@ def test_forward_correct(solver):
     lambda s: -(np.matmul(np.atleast_2d(s['x']).T, np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
     lambda s: np.sin(s['t']) + np.sin(np.pi + s['t']) - s['x'] * np.exp(np.log(s['c']))
 ])
-def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc):
+@pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
+def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_backend):
+
+    # This loads the conversion operation overloads for a particular backend.
+    # FIXME hk0jd16g will these overloads bleed into other tests?
+    import_module(lang_interop_backend)
+
     c_ = c_.double().requires_grad_()
     timespan = torch.linspace(1.0, 10., 10).double()
 
     # TODO gradcheck wrt time.
 
     def dynamics(s: State) -> State:
-        try:
-            dx = dynfunc(s)
+        dx = dynfunc(s)
 
-            # for the test case where there are two parameters but only one (scalar) state variable.
-            if x0.ndim == 0 and c_.ndim > 0:
-                dx = dx.sum()
+        # for the test case where there are two parameters but only one (scalar) state variable.
+        if x0.ndim == 0 and c_.ndim > 0:
+            dx = dx.sum()
 
-            return dict(x=dx)
-        except Exception as e:
-            raise  # TODO remove, just for breakpoint
+        return dict(x=dx)
 
     def wrapped_simulate(c):
         sp0: State = dict(x=x0.double(), c=c)
