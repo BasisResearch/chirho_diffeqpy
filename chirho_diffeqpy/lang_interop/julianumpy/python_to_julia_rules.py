@@ -1,5 +1,6 @@
 from .internals import JuliaThingWrapper, _JuliaThingWrapperArray
 from ..ops import convert_python_to_julia
+import numpy as np
 
 
 @convert_python_to_julia.register
@@ -21,6 +22,14 @@ def _(thing: _JuliaThingWrapperArray, out=None, out_dtype=None):
     print("out", out)
     print("out_dtype", out_dtype)
     return JuliaThingWrapper.unwrap_array(thing, out=out, out_dtype=out_dtype)
+
+
+@convert_python_to_julia.register
+def _(thing: np.ndarray, out=None, out_dtype=None):
+    # This handles unwrapped numpy arrays of wrapped julia types. Recast as view through _JuliathingWrapperArray,
+    #  and then convert as specified elsewhere. Note that we don't rewrap, as that defaults to also wrapping
+    #  all the elements in a JuliaThingWrapper.
+    return convert_python_to_julia(thing.view(_JuliaThingWrapperArray), out=out, out_dtype=out_dtype)
 
 
 @convert_python_to_julia.register(tuple)  # to support multiple return values.

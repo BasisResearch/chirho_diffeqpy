@@ -26,7 +26,7 @@ class DiffEqPy(Solver[torch.Tensor]):
     #     self._lazily_compiled_solver = None
 
     def _pyro_simulate_point(self, msg) -> None:
-        from chirho.dynamical.internals.backends.diffeqdotjl import (
+        from chirho_diffeqpy.internals import (
             diffeqdotjl_simulate_point,
         )
 
@@ -39,7 +39,7 @@ class DiffEqPy(Solver[torch.Tensor]):
         msg["done"] = True
 
     def _pyro_simulate_trajectory(self, msg) -> None:
-        from chirho.dynamical.internals.backends.diffeqdotjl import (
+        from chirho_diffeqpy.internals import (
             diffeqdotjl_simulate_trajectory,
         )
 
@@ -52,7 +52,7 @@ class DiffEqPy(Solver[torch.Tensor]):
         msg["done"] = True
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        from chirho.dynamical.internals.backends.diffeqdotjl import (
+        from chirho_diffeqpy.internals import (
             diffeqdotjl_simulate_to_interruption,
         )
 
@@ -77,7 +77,7 @@ class DiffEqPy(Solver[torch.Tensor]):
         dynamics, initial_state_ao_params, start_time, end_time = msg["args"]
 
         if self._lazily_compiled_solver is None:
-            from chirho.dynamical.internals.backends.diffeqdotjl import diffeqdotjl_compile_problem
+            from chirho_diffeqpy.internals import diffeqdotjl_compile_problem
 
             msg["kwargs"].update(self.solve_kwargs)
 

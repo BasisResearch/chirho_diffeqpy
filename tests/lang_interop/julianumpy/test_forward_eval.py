@@ -25,7 +25,7 @@ import chirho_diffeqpy.lang_interop.julianumpy
 def _forward_eval_test(f_args_kwargs):
     f, argskwargs = f_args_kwargs
 
-    f_from_jl = callable_from_julia(f, out_dtype=np.float64)
+    f_from_jl = callable_from_julia(out_dtype=np.float64)(f)
     f_from_py = f
 
     for args, kwargs in argskwargs:

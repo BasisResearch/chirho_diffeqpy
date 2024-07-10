@@ -15,6 +15,7 @@ import numpy as np
 from typing import Union
 from functools import singledispatch
 from copy import copy
+from chirho_diffeqpy.lang_interop import callable_from_julia
 from juliacall import Main as jl
 
 
@@ -31,37 +32,47 @@ def diffeqdotjl_compile_problem(
     initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params, start_time)
 
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
-    def ode_f(flat_dstate_out, flat_state, flat_params, t):
+    # callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the preallocated
+    #  output array as the first argument (as opposed to listing out as a keyword, which is the default expectation).
+    # diffeqpy, when compiling the dynamics function, passes the output array as the first argument.
+    @callable_from_julia(out_as_first_arg=True)
+    def ode_f(flat_state, flat_params, t):
         # Unflatten the state u according to the state variables stored in initial dstate.
         state = _unflatten_state(
-            # Wrap julia symbolics (that will be passed through this during jit) so that numpy doesn't introspect them
-            #  as sequences with a large number of dimensions.
-            JuliaThingWrapper.wrap_array(flat_state),
+            flat_state,  # WIP NOTE: this used to be JuliaThingWrapper.wrap_array(flat_state)
             initial_state
         )
 
         # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
         # of julia symbolics involved in jit copmilation. I.e. while initial_params has the same real values as
         # flat_params, they do not carry gradient information that can be propagated through the julia solver.
-        params = _unflatten_state(
-            JuliaThingWrapper.wrap_array(flat_params),
+        params: StateAndOrParams = _unflatten_state(
+            flat_params,  # WIP NOTE: this used to be JuliaThingWrapper.wrap_array(flat_params)
             torch_params
-        ) if len(flat_params) > 0 else StateAndOrParams()
+        ) if len(flat_params) > 0 else dict()
 
-        state_ao_params = StateAndOrParams(**state, **params, t=JuliaThingWrapper(t))
+        state_ao_params: StateAndOrParams = dict(
+            **state,
+            **params,
+            t=t)  # WIP NOTE: this used to be JuliaThingWrapper(t)
 
         dstate = dynamics(state_ao_params)
 
         flat_dstate = _flatten_state_ao_params(dstate)
 
-        try:
-            # Unwrap the array of JuliaThingWrappers back into a numpy array of julia symbolics.
-            JuliaThingWrapper.unwrap_array(flat_dstate, out=flat_dstate_out)
-        except IndexError as e:
-            # TODO this could be made more informative by pinpointing which particular dstate is the wrong shape.
-            raise IndexError(f"Number of elements in dstate ({len(flat_dstate)}) does not match the number of"
-                             f" elements defined in the initial state ({len(flat_dstate_out)}). "
-                             f"\nOriginal error: {e}")
+        print("flat_dstate", flat_dstate)
+
+        return flat_dstate
+
+        # WIP NOTE: used to do this, but now callable_from_julia is handling the unwrapping to out.
+        # try:
+        #     # Unwrap the array of JuliaThingWrappers back into a numpy array of julia symbolics.
+        #     JuliaThingWrapper.unwrap_array(flat_dstate, out=flat_dstate_out)
+        # except IndexError as e:
+        #     # TODO this could be made more informative by pinpointing which particular dstate is the wrong shape.
+        #     raise IndexError(f"Number of elements in dstate ({len(flat_dstate)}) does not match the number of"
+        #                      f" elements defined in the initial state ({len(flat_dstate_out)}). "
+        #                      f"\nOriginal error: {e}")
 
     # Flatten the initial state and parameters.
     flat_initial_state = _flatten_state_ao_params(initial_state)
@@ -126,7 +137,7 @@ def _unflatten_state(
 ) -> StateAndOrParams[Union[Tnsr, np.ndarray]]:
 
     var_order = get_var_order(shaped_state_ao_params)
-    state_ao_params = StateAndOrParams()
+    state_ao_params: StateAndOrParams = dict()
     for v in var_order:
         shaped = shaped_state_ao_params[v]
         shape = shaped.shape
@@ -176,8 +187,8 @@ def separate_state_and_params(dynamics: Dynamics[np.ndarray], initial_state_ao_p
     # Keys that do appear in the dynamics are state variables.
     state_keys = [k for k in initial_state_ao_params.keys() if k in initial_dstate_np.keys()]
 
-    torch_params = StateAndOrParams(**{k: initial_state_ao_params[k] for k in param_keys})
-    initial_state = StateAndOrParams(**{k: initial_state_ao_params[k] for k in state_keys})
+    torch_params: StateAndOrParams = dict(**{k: initial_state_ao_params[k] for k in param_keys})
+    initial_state: StateAndOrParams = dict(**{k: initial_state_ao_params[k] for k in state_keys})
 
     return initial_state, torch_params
 
