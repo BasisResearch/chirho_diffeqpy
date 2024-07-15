@@ -18,6 +18,18 @@ requirements_path = osp.join(osp.dirname(osp.abspath(__file__)), "docs", "source
 with open(requirements_path, "r") as f:
     requirements_list = f.read().splitlines()
 
+# Extract the chirho install requirements from the requirements list.
+chirho_requirements = [req for req in requirements_list if req.startswith("chirho")]
+assert len(chirho_requirements) == 1, f"Expected exactly one chirho requirement, got {chirho_requirements}."
+chirho_requirement = chirho_requirements[0]
+# Our tests call chirho tests, so we need to construct the chirho install requirement with the test option,
+#  and use that in our extras_require for the test option.
+# For example, we'd need to change
+# chirho_requirement == "chirho[dynamical]==0.2.0" to chirho_requirement == "chirho[dynamical,test]==0.2.0"
+assert "[dynamical]" in chirho_requirement,\
+    f"Expected chirho requirement to require dynamical extras option, got {chirho_requirement}."
+chirho_test_requirement = chirho_requirement.replace("]", "test]")
+
 setup(
     name="chirho_diffeqpy",
     version=VERSION,
@@ -34,20 +46,8 @@ setup(
     install_requires=requirements_list,
     extras_require={
         "test": [
-            "pytest",
-            # "pytest-cov",
-            # "pytest-xdist",
-            "mypy",
-            "black",
-            "flake8",
-            # "isort",
-            # "sphinx==7.1.2",
-            # "sphinxcontrib-bibtex",
-            # "sphinx_rtd_theme==1.3.0",
-            # "myst_parser",
-            # "nbsphinx",
-            # "nbval",
-            # "nbqa",
+            # We use all the same test dependencies that chirho uses.
+            chirho_test_requirement,
         ],
     },
     python_requires="==3.11.*",  # juliatorch lists the most strict limitation, as it was only tested on 3.11.
