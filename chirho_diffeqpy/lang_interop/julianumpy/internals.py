@@ -184,6 +184,13 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
             print("out.shape", out.shape)
             print("out.dtype", out.dtype)
 
+        print("arr.shape", arr.shape)
+        print("arr.dtype", arr.dtype)
+        print("out.shape", out.shape)
+        print("out")
+        print(out)
+        print("arr")
+        print(arr)
         for idx, v in np.ndenumerate(arr):
             out[idx] = v.julia_thing
         print("----finished----")
