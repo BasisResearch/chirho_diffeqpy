@@ -76,7 +76,9 @@ def diffeqdotjl_compile_problem(
         #  used for their types and shapes so that the ODEProblem knows what to compile for.
         flat_initial_state.detach().numpy(),
         np.array([start_time, end_time], dtype=np.float64),
-        flat_atemp_params.detach().numpy())
+        # HACK sgfeh2 stuff breaks with a len zero array, and passing nothing or None incurs the same problem.
+        flat_atemp_params.detach().numpy() if len(flat_atemp_params) else np.ones((1,), dtype=np.float64),
+    )
 
     fast_prob = de.jit(prob)
 
@@ -102,7 +104,7 @@ def flat_cat(*vs):
 
     # If atleast_1d receives a single argument, it will return a single array, rather than a tuple of arrays.
     vs = np.atleast_1d(*vs)
-    return flat_cat_numpy(*(vs if isinstance(vs, list) else (vs,)))
+    return flat_cat_numpy(*(vs if isinstance(vs, (list, tuple)) else (vs,)))
 
 
 @flat_cat.register
@@ -187,6 +189,8 @@ def _diffeqdotjl_ode_simulate_inner(
     #  juliatorch currently requires a single matrix or vector as input.
     flat_initial_state = _flatten_mapping(initial_state)
     flat_atemp_params = _flatten_mapping(atemp_params)
+    # HACK sgfeh2 stuff breaks with a len zero array, and passing nothing or None incurs the same problem.
+    flat_atemp_params = torch.ones((1,), dtype=torch.float64) if len(flat_atemp_params) == 0 else flat_atemp_params
     outer_u0_t_p = torch.cat([flat_initial_state, timespan, flat_atemp_params])
 
     def inner_solve(u0_t_p):

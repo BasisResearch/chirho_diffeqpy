@@ -4,14 +4,13 @@ import chirho
 import sys
 import os.path as osp
 # from chirho_diffeqpy import DiffEqPy
-from chirho_tests_reparametrized.fixtures_from_chirho import chirho_root_path
+from chirho_tests_reparametrized.fixtures_imported_from_chirho import chirho_root_path
 from chirho.dynamical.handlers.solver import Solver
 from chirho_tests_reparametrized.reparametrizations import reparametrize_argument
 import inspect
 from typing import List, Tuple, Optional
 import torch
-
-# TODO what about generating separate solver instances for every lang_interop backend?
+from functools import wraps
 
 
 def _reparametrize_args(args: Tuple, test_id: Optional[str] = None, arg_names: Optional[str] = None) -> Optional[Tuple]:
@@ -104,6 +103,16 @@ def _reparametrize_markers_in_place(metafunc) -> bool:
     return reparametrized_any_marker
 
 
+# def _skip_wrapper(f):
+#     @wraps(f)
+#     def wrapper(*args, **kwargs):
+#         return pytest.skip(
+#             reason="No solver argument found to reparametrize. "
+#                    "This test would not exercise the DiffEqPy solver backend."
+#         )
+#     return wrapper
+
+
 class ReparametrizeWithDiffEqPySolver:
     @staticmethod
     def pytest_generate_tests(metafunc):
@@ -114,14 +123,39 @@ class ReparametrizeWithDiffEqPySolver:
         reparametrized_any_marker = _reparametrize_markers_in_place(metafunc)
 
         if not reparametrized_any_marker:
-            metafunc.definition.own_markers.append(
-                pytest.mark.skip(reason="No solver parametrization marker found to reparametrize. This test would"
-                                        " not exercise the DiffEqPy solver backend.")
-            )
+            # Doesn't work, skips whole module.
+            # pytest.skip("No solver parametrization marker found to reparametrize. This test would not exercise the"
+            #             " DiffEqPy solver backend.")
+
+            # Doesn't work, doesn't change anything.
+            # metafunc.definition.add_marker(pytest.mark.skip(
+            #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
+            #            " DiffEqPy solver backend."
+            # ))
+
+            # Doesn't work, doesn't change anything and skip never gets called.
+            # metafunc.function = _skip_wrapper
+
+            # Also doesn't work. Also tries to use an internal pytest
+            # metafunc.definition.own_markers.clear()
+            # skip_mark = pytest.Mark(name="skip", args=tuple(), kwargs=dict(
+            #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
+            #            " DiffEqPy solver backend."
+            # ))
+            # metafunc.definition.own_markers.append(skip_mark)
+
+            # TODO warnings module.
+            print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
+                  f"solver, but not yet figured out how to dynamically skip individual tests.")
 
 
 # DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
 torch.set_default_dtype(torch.float64)
+
+# TODO what about generating separate solver instance parametrizations for every lang_interop backend?
+# See also # FIXME hk0jd16g in test_solver.
+# Unused import to register the lang_interop machinery.
+from chirho_diffeqpy.lang_interop import julianumpy
 
 
 # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy

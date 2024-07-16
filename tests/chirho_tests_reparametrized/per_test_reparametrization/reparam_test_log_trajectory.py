@@ -1,5 +1,5 @@
 # TODO can we make these also single dispatch mechanisms that are only loaded for specific tests?
-# TODO cz right now these will need to handle all their own dispatching via e.g. switch statements etc.
+# TODO cz right now these will need to handle all their own dispatching via switch statements etc.
 
 def test_log_trajectory__test_start_end_time_collisions(
         lambda_dynamics,
@@ -10,4 +10,6 @@ def test_log_trajectory__test_start_end_time_collisions(
     # Arguably, we could default to this behavior, but the current design requires that the user explicitly specify
     #  that there are indeed no parameters.
     empty_simulation_kwargs["atemp_params"] = dict()
-    return lambda_dynamics, empty_simulation_kwargs
+
+    # Also, the lambda needs to take an (empty, in this case) parameters dictionary.
+    return lambda state, params: lambda_dynamics(state), empty_simulation_kwargs

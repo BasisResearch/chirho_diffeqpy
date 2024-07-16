@@ -1,5 +1,5 @@
 from functools import singledispatch
-from .fixtures_from_chirho import UnifiedFixtureDynamics
+from .fixtures_imported_from_chirho import UnifiedFixtureDynamics
 from chirho.dynamical.handlers.solver import Solver
 from chirho_diffeqpy import DiffEqPy
 from .fixtures import sir_dynamics, sample_sir_params
