@@ -8,76 +8,128 @@ from chirho_tests_reparametrized.fixtures_from_chirho import chirho_root_path
 from chirho.dynamical.handlers.solver import Solver
 from chirho_tests_reparametrized.reparametrizations import reparametrize_argument
 import inspect
+from typing import List, Tuple, Optional
+import torch
+
+# TODO what about generating separate solver instances for every lang_interop backend?
+
+
+def _reparametrize_args(args: Tuple, test_id: Optional[str] = None, arg_names: Optional[str] = None) -> Optional[Tuple]:
+
+    # Look for any instances or subclasses of Solver in the args. If there is one, then this test should
+    #  be reparametrized. TODO this won't recurse into collections that contain solvers.
+    has_parametrized_solver = (
+        # check for solver instances
+        any(isinstance(arg, Solver) for arg in args)
+        # check for solver types
+        | any(inspect.isclass(arg) and issubclass(arg, Solver) for arg in args)
+    )
+
+    # If there is no reparametrization required, return None.
+    if not has_parametrized_solver:
+        return None
+
+    # Otherwise, reparametrize all the args.
+    new_args = []
+    for arg in args:
+
+        try:
+            new_arg = reparametrize_argument(arg, test_id=test_id, arg_names=arg_names)
+        except Exception as e:
+            raise NotImplementedError(
+                f"Found a solver to reparametrize, but could not reparametrize argument "
+                f" {arg}. \n Original exception:\n {e}"
+            ) from e
+
+        new_args.append(new_arg)
+
+    return tuple(new_args)
+
+
+def _reparametrize_markers_in_place(metafunc) -> bool:
+
+    markers = metafunc.definition.own_markers
+
+    test_file, test_line, test_name = metafunc.definition.location
+    test_id = metafunc.definition.nodeid
+
+    reparametrized_any_marker = False
+
+    for marker in markers:
+
+        # We can only reparametrize args of parametrize markers.
+        if marker.name != "parametrize":
+            continue
+
+        # TODO triple confirm that parametrize marks will never have more than 2 args here? And/or that the first
+        #  and second args are always the arg name strings and list of arg values respectively?
+        if not len(marker.args) > 1:
+            continue
+        # List of args tuples in this parametrize marker.
+        args_list = marker.args[1]
+
+        args_name_str: str = marker.args[0]
+
+        # TODO processing the entire args_list isn't ideal, because if chirho ever introduces a second solver locally,
+        #  then that solver will appear multiple times in the args_list, and be converted accordingly to a DiffEqPy
+        #  solver. The pytest parametrizations though will have specified the same tests for different solvers, so here,
+        #  this will result in redundant tests for all of those repeated cases where only the solver was varied.
+        try:
+            reparametrized_args_list = [_reparametrize_args(args, test_id=test_id, arg_names=args_name_str)
+                                        for args in args_list]
+        except NotImplementedError as e:
+            raise NotImplementedError(f"Could not reparametrize a solver argument in a parametrize marker for test "
+                                      f"{test_name} at {test_file}:{test_line} with parametrized arguments "
+                                      f"{args_name_str} = {args_list}. \n Original exception:\n {e}") from e
+
+        # Require that either all the args required reparametrization, or none of them did.
+        was_reparametrized_per_arg = [p is not None for p in reparametrized_args_list]
+        all_processed = all(was_reparametrized_per_arg)
+        none_processed = not any(was_reparametrized_per_arg)
+
+        if not (all_processed | none_processed):
+            raise ValueError("Either all args in a parametrize marker must require reparametrization, or none of them."
+                             " This can happen if some args involve a Solver instance or type while others do not."
+                             f" Test {test_name} at {test_file}:{test_line} with parametrized arguments "
+                             f"{args_name_str} = {args_list}.")
+
+        if none_processed:
+            continue
+
+        args_list.clear()
+        args_list.extend(reparametrized_args_list)
+
+        reparametrized_any_marker = True
+
+    return reparametrized_any_marker
 
 
 class ReparametrizeWithDiffEqPySolver:
     @staticmethod
     def pytest_generate_tests(metafunc):
 
-        found_solver_to_reprametrize = False
-
         # This logic reparametrizes any chirho tests that have 1) a solver parametrization that 2) includes the
-        #  TorchDiffEq solver as an argument (TODO but not currently a keyword argument).
-        #   Then 3) replace the entire solver parametrization with just [DiffEqPy]. Note that we can fully replace with
-        #   just DiffEqPy because we only want to test this repo's solver. Chirho tests its own solvers.
-        for marker in metafunc.definition.own_markers:
+        #  Solver type or instance as an argument. Then 3) reparametrizes the arguments accordingly to work with
+        #  DiffEqPy and pure dynamics functions.
+        reparametrized_any_marker = _reparametrize_markers_in_place(metafunc)
 
-            if marker.name != "parametrize":
-                continue
-
-            if not len(marker.args) > 1:
-                continue
-
-            # FIXME this isn't ideal, because if chirho ever introduces a second solver locally, then this
-            #  will generate redundant tests for all the cases that test the second solver (it will just test
-            #  DiffEqPy instead a second time).
-            # TODO triple confirm that parametrize marks will never have more than 2 args here? And/or that the first
-            #  and second args are always the arg name strings and list of arg values respectively?
-            for arg_vals in marker.args[1]:
-
-                has_parametrized_solver = (
-                    any(isinstance(arg, Solver) for arg in arg_vals)
-                    | any(inspect.isclass(arg) and issubclass(arg, Solver) for arg in arg_vals)
-                )
-
-                if not has_parametrized_solver:
-                    continue
-
-                # TODO this should be true for all of them...but we probably want to handle the 1:M nuance here.
-                found_solver_to_reprametrize = True
-
-                new_arg_vals = []
-                for arg in arg_vals:
-                    try:
-                        new_arg_vals.append(reparametrize_argument(arg))
-                    except NotImplementedError as e:
-                        raise NotImplementedError(
-                            f"Found a solver to reparametrize, but could not reparametrize argument "
-                            f" {arg} in {metafunc.definition.nodeid}."
-                        )
-
-                # Not sure if doing this in-place is necessary.
-                # FIXME this won't work b/c arg_vals is a tuple of arguments in a larger list.
-                #  Instead, we need to append the converted new_arg_vals to an outer list, and then perform this
-                #  logic on the outer list.
-                raise NotImplementedError("FIXME see comment immediately above.")
-                arg_vals.clear()
-                arg_vals.extend(new_arg_vals)
-
-        if not found_solver_to_reprametrize:
+        if not reparametrized_any_marker:
             metafunc.definition.own_markers.append(
-                pytest.mark.skip(reason="No solver parametrization found to reparametrize.")
+                pytest.mark.skip(reason="No solver parametrization marker found to reparametrize. This test would"
+                                        " not exercise the DiffEqPy solver backend.")
             )
 
 
-[print(p) for p in sys.path]
+# DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
+torch.set_default_dtype(torch.float64)
+
 
 # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
 #  solver for testing.
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        "-x", f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
