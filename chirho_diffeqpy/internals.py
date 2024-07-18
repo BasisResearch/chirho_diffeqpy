@@ -21,6 +21,15 @@ T = TypeVar("T")
 ATempParams = Mapping[str, T]
 Dynamics = Callable[[State[T], ATempParams[T]], State[T]]
 
+_ShapeType = Tuple[int, ...]
+_NamedShape = Tuple[str, _ShapeType]
+MappingShape = Tuple[_NamedShape, ...]
+
+
+def get_mapping_shape(mapping: Mapping[str, Tnsr]) -> MappingShape:
+    var_order = get_var_order(mapping)
+    return tuple((_var, mapping[_var].shape) for _var in var_order)
+
 
 def pre_broadcast(
         dynamics: Dynamics[np.ndarray],

@@ -1,5 +1,8 @@
 # ty to ChatGPT
 import numpy as np
+from contextlib import nullcontext
+import pyro
+import pyro.distributions as dist
 
 
 def flux_dynamics(state, atemp_params):
@@ -96,3 +99,27 @@ ab_xy_dynfuncs = [
     chemical_reaction_dynamics,
     logistic_growth_dynamics,
 ]
+
+
+def ab_xy_prior(
+    xplatesize=1,
+    yplatesize=1,
+    aplatesize=1,
+    bplatesize=1,
+):
+    xplate = pyro.plate("xplate", xplatesize, dim=-4) if xplatesize is not None else nullcontext()
+    yplate = pyro.plate("yplate", yplatesize, dim=-3) if yplatesize is not None else nullcontext()
+    aplate = pyro.plate("aplate", aplatesize, dim=-2) if aplatesize is not None else nullcontext()
+    bplate = pyro.plate("bplate", bplatesize, dim=-1) if bplatesize is not None else nullcontext()
+
+    with xplate:
+        x = pyro.sample("x", dist.Uniform(0.1, 1))
+        with yplate:
+            y = pyro.sample("y", dist.Uniform(0.1, 1))
+
+    with aplate:
+        a = pyro.sample("a", dist.Uniform(0.1, 1))
+        with bplate:
+            b = pyro.sample("b", dist.Uniform(0.1, 1))
+
+    return dict(x=x, y=y), dict(a=a, b=b)

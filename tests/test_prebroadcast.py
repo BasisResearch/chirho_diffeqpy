@@ -2,34 +2,7 @@ import juliacall  # Must precede even indirect torch imports to preventshape seg
 import pytest
 import torch
 from chirho_diffeqpy.internals import pre_broadcast
-from contextlib import nullcontext
-import pyro
-import pyro.distributions as dist
-from .fixtures import ab_xy_dynfuncs
-
-
-def prior(
-    xplatesize,
-    yplatesize,
-    aplatesize,
-    bplatesize,
-):
-    xplate = pyro.plate("xplate", xplatesize, dim=-4) if xplatesize is not None else nullcontext()
-    yplate = pyro.plate("yplate", yplatesize, dim=-3) if yplatesize is not None else nullcontext()
-    aplate = pyro.plate("aplate", aplatesize, dim=-2) if aplatesize is not None else nullcontext()
-    bplate = pyro.plate("bplate", bplatesize, dim=-1) if bplatesize is not None else nullcontext()
-
-    with xplate:
-        x = pyro.sample("x", dist.Normal(0, 1))
-        with yplate:
-            y = pyro.sample("y", dist.Normal(0, 1))
-
-    with aplate:
-        a = pyro.sample("a", dist.Normal(0, 1))
-        with bplate:
-            b = pyro.sample("b", dist.Normal(0, 1))
-
-    return dict(x=x, y=y), dict(a=a, b=b)
+from .fixtures import ab_xy_dynfuncs, ab_xy_prior
 
 
 def exec_numpy_from_torch(func, state, params):
@@ -55,7 +28,7 @@ def test_prebroadcast(
     bplatesize,
 ):
 
-    initial_state, atemp_params = prior(xplatesize, yplatesize, aplatesize, bplatesize)
+    initial_state, atemp_params = ab_xy_prior(xplatesize, yplatesize, aplatesize, bplatesize)
 
     pre_broadcasted_initial_state = pre_broadcast(func, initial_state, atemp_params)
 

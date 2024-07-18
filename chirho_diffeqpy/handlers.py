@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from typing import TypeVar, Mapping, Dict
+from typing import TypeVar, Dict, Tuple
 
 import torch
 
 from chirho.dynamical.internals.solver import Solver
-from .internals import ATempParams
+from .internals import ATempParams, pre_broadcast, get_mapping_shape, MappingShape
 from copy import copy
+
+from diffeqpy import de
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 ATEMPPARAMS_KEY = "atemp_params"
+
+MappingShapePair = Tuple[MappingShape, MappingShape]
 
 
 class DiffEqPy(Solver[torch.Tensor]):
@@ -20,7 +24,7 @@ class DiffEqPy(Solver[torch.Tensor]):
         super().__init__()
 
         self.solve_kwargs = dict()
-        self._lazily_compiled_solver = None
+        self._lazily_compiled_solvers_by_shape: Dict[MappingShapePair, de.ODEProblem] = dict()
         self._dynamics_that_solver_was_compiled_with = None
 
     @staticmethod
@@ -94,15 +98,14 @@ class DiffEqPy(Solver[torch.Tensor]):
 
         (dynamics, initial_state, start_time, end_time), atemp_params, kwargs = self._process_simulate_args_kwargs(msg)
 
-        # TODO this also should check to make sure that compilation kwargs are the same as the ones that were used
-        #  to compile the solver.
+        # Primarily due to interventions, but also different platings on the parameters, we may have a number of
+        #  different shape requirements. We need to track separate problems that are compiled for each.
+        initial_state = pre_broadcast(dynamics, initial_state, atemp_params)
+        initial_state_shape = get_mapping_shape(initial_state)
+        atemp_params_shape = get_mapping_shape(atemp_params)
+        problem_shape = (initial_state_shape, atemp_params_shape)
 
-        if self._lazily_compiled_solver is None:
-            from chirho_diffeqpy.internals import diffeqdotjl_compile_problem
-
-            self._lazily_compiled_solver = diffeqdotjl_compile_problem(
-                dynamics, initial_state, start_time, end_time, atemp_params=atemp_params, **kwargs
-            )
+        if self._dynamics_that_solver_was_compiled_with is None:
             self._dynamics_that_solver_was_compiled_with = dynamics
         elif dynamics is not self._dynamics_that_solver_was_compiled_with:
             raise ValueError(
@@ -111,5 +114,15 @@ class DiffEqPy(Solver[torch.Tensor]):
                 f" a new {DiffEqPy.__name__} solver instance and simulate with the new dynamics in that context."
             )
 
-        msg["value"] = self._lazily_compiled_solver
+        # TODO this also should check to make sure that compilation kwargs are the same as the ones that were used
+        #  to compile the solver.
+
+        if problem_shape not in self._lazily_compiled_solvers_by_shape:
+            from chirho_diffeqpy.internals import diffeqdotjl_compile_problem
+
+            self._lazily_compiled_solvers_by_shape[problem_shape] = diffeqdotjl_compile_problem(
+                dynamics, initial_state, start_time, end_time, atemp_params=atemp_params, **kwargs
+            )
+
+        msg["value"] = self._lazily_compiled_solvers_by_shape[problem_shape]
         msg["done"] = True
