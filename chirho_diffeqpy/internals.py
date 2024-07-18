@@ -22,6 +22,38 @@ ATempParams = Mapping[str, T]
 Dynamics = Callable[[State[T], ATempParams[T]], State[T]]
 
 
+def pre_broadcast(
+        dynamics: Dynamics[np.ndarray],
+        initial_state_torch: State[Tnsr],
+        atemp_params_torch: ATempParams[Tnsr]
+):
+    """
+    Prebroadcasts an initial state across the parameters so that compiled dynamics can be made with respect to the
+    same input and output state shapes.
+    :param dynamics:
+    :param initial_state_torch:
+    :param atemp_params_torch:
+    :return:
+    """
+    # Detach and convert everything to numpy arrays.
+    initial_state_np = {k: v.detach().numpy() for k, v in initial_state_torch.items()}
+    atemp_params_np = {k: v.detach().numpy() for k, v in atemp_params_torch.items()}
+
+    if "t" not in initial_state_np:
+        initial_state_np["t"] = 0.0
+
+    # Evaluate the dynamics to get the output shape — this corresponds to the broadcast-induced state shape that
+    #  we actually need to be solving for. Note: the broadcast shape will typically be induced by plating on the params.
+    output = dynamics(initial_state_np, atemp_params_np)
+
+    # Now, we just want to broadcast the initial state to the shape of the output. To do so, we can just add zeros_like
+    #  output to the initial_state.
+    broadcasted_initial_state = {k: initial_state_torch[k] + np.zeros_like(torch.tensor(output[k]))
+                                 for k, v in initial_state_torch.items()}
+
+    return broadcasted_initial_state
+
+
 def diffeqdotjl_compile_problem(
     dynamics: Dynamics[np.ndarray],
     initial_state: State[Tnsr],
@@ -64,6 +96,10 @@ def diffeqdotjl_compile_problem(
         flat_dstate = _flatten_mapping(dstate)
 
         return flat_dstate
+
+    # Pre-broadcast the initial state so that we compile the dynamics function with the proper state-space dimensions
+    #  (as induced, typically, by the dynamics broadcasting the parameters over an unexpanded initial state).
+    initial_state = pre_broadcast(dynamics, initial_state, atemp_params)
 
     # Flatten the initial state and parameters.
     flat_initial_state = _flatten_mapping(initial_state)
@@ -184,6 +220,8 @@ def _diffeqdotjl_ode_simulate_inner(
         atemp_params=atemp_params,
         **kwargs,
     )
+
+    initial_state = pre_broadcast(dynamics, initial_state, atemp_params)
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.

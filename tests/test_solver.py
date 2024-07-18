@@ -42,33 +42,27 @@ def test_forward_correct(solver, lang_interop_backend):
     assert torch.allclose(lt.trajectory['x'], correct, atol=1e-4)
 
 
-@pytest.mark.parametrize("solver", [DiffEqPy])
-@pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
-@pytest.mark.parametrize("c_", [torch.tensor(0.5), torch.tensor([0.5, 0.3])])
-@pytest.mark.parametrize("dynfunc", [
+dynfuncs = [
     # Unsimplified defs just ensure the solutions are stable but still exercise the relevant ops. Julia does compile
     #  these away, but not until it's able to successfully push symbolics through the unsimplified python func.
-    # lambda s: -s['x'] * s['c'],
     lambda s, p: -s['x'] * p['c'],
-    # lambda s: -(s['x'] * s['c']),
     lambda s, p: -(s['x'] * p['c']),
-    # lambda s: -.5 * s['x'] * s['c'],  # w/ python numeric type
     lambda s, p: -.5 * s['x'] * p['c'],  # w/ python numeric type
-    # lambda s: -s['x'] / (1. / s['c']),
     lambda s, p: -s['x'] / (1. / p['c']),
-    # lambda s: -s['x'] * (s['c'] + s['c'] - s['c']),
     lambda s, p: -s['x'] * (p['c'] + p['c'] - p['c']),
-    # lambda s: -s['x'] ** (s['c'] / s['c']),
     lambda s, p: -s['x'] ** (p['c'] / p['c']),
     # The last three dynfuncs test numpy ufunc dispatch to julia.
     # .ravel and slice ensure that the return here always matches the initial state (the 2x2 matmul gives you 4 elems).
-    # lambda s: -((np.atleast_2d(s['x']).T @ np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
     lambda s, p: -((np.atleast_2d(s['x']).T @ np.atleast_2d(p['c'])) * s['x']).ravel()[:s['x'].size],
-    # lambda s: -(np.matmul(np.atleast_2d(s['x']).T, np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
     lambda s, p: -(np.matmul(np.atleast_2d(s['x']).T, np.atleast_2d(p['c'])) * s['x']).ravel()[:s['x'].size],
-    # lambda s: np.sin(s['t']) + np.sin(np.pi + s['t']) - s['x'] * np.exp(np.log(s['c']))
     lambda s, p: np.sin(s['t']) + np.sin(np.pi + s['t']) - s['x'] * np.exp(np.log(p['c']))
-])
+]
+
+
+@pytest.mark.parametrize("solver", [DiffEqPy])
+@pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
+@pytest.mark.parametrize("c_", [torch.tensor(0.5), torch.tensor([0.5, 0.3])])
+@pytest.mark.parametrize("dynfunc", dynfuncs)
 @pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
 def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_backend):
 
@@ -90,7 +84,7 @@ def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_bac
 
         return dict(x=dx)
 
-    def wrapped_simulate(c):
+    def wrapped_simulate(c):  # TODO test diff wrt time and initial state?
         u0: State = dict(x=x0.double())
         atemp_params: ATempParams = dict(c=c.double())
         with LogTrajectory(timespan) as lt:

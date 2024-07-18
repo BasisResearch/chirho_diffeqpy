@@ -10,7 +10,7 @@ from .per_test_reparametrization import per_test_reparametrization
 def reparametrize_argument(primary_arg, *secondary_args, test_id: str = None, arg_names: str = None):
     # TODO the test specific rules should probably take precedent?
     # If no general reparametrization applies, then we need to dispatch to test-specific reparametrizations.
-    if test_id in per_test_reparametrization:
+    if test_id in per_test_reparametrization:  # TODO make this try: except Exception as e, then raise ... from e
         return per_test_reparametrization[test_id](primary_arg, *secondary_args, arg_names=arg_names)
     else:
         raise NotImplementedError("This type does not yet have a reparametrization implemented, and no test-specific "
