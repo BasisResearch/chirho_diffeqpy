@@ -178,22 +178,10 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
         #  compilation for our use case.
         if out is None:
-            print("making out array")
             out = np.empty(arr.shape, dtype=out_dtype)
 
-            print("out.shape", out.shape)
-            print("out.dtype", out.dtype)
-
-        print("arr.shape", arr.shape)
-        print("arr.dtype", arr.dtype)
-        print("out.shape", out.shape)
-        print("out")
-        print(out)
-        print("arr")
-        print(arr)
         for idx, v in np.ndenumerate(arr):
             out[idx] = v.julia_thing
-        print("----finished----")
         return out
 
     def __repr__(self):
