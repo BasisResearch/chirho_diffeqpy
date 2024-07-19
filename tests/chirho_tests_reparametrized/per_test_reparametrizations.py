@@ -1,6 +1,6 @@
 from .reparametrization import reparametrize_argument_by_type
 from .fixtures import isalambda
-from .mock_closure import MockDynamicsClosureDirectPass
+from .fixtures import MockDynamicsClosureDirectPass
 
 
 test_log_trajectory__test_start_end_time_collisions = \

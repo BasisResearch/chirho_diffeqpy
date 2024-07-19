@@ -17,6 +17,7 @@ from tests.dynamical.dynamical_fixtures import (
     SIRObservationMixin,
     SIRReparamObservationMixin,
     UnifiedFixtureDynamics,
+    UnifiedFixtureDynamicsBase,
     bayes_sir_model,
     sir_param_prior,
 )

@@ -19,7 +19,7 @@ from juliacall import Main as jl
 
 T = TypeVar("T")
 ATempParams = Mapping[str, T]
-Dynamics = Callable[[State[T], ATempParams[T]], State[T]]
+PureDynamics = Callable[[State[T], ATempParams[T]], State[T]]
 
 _ShapeType = Tuple[int, ...]
 _NamedShape = Tuple[str, _ShapeType]
@@ -32,7 +32,7 @@ def get_mapping_shape(mapping: Mapping[str, Tnsr]) -> MappingShape:
 
 
 def pre_broadcast(
-        dynamics: Dynamics[np.ndarray],
+        dynamics: PureDynamics[np.ndarray],
         initial_state_torch: State[Tnsr],
         atemp_params_torch: ATempParams[Tnsr]
 ):
@@ -63,7 +63,7 @@ def pre_broadcast(
 
 
 def diffeqdotjl_compile_problem(
-    dynamics: Dynamics[np.ndarray],
+    dynamics: PureDynamics[np.ndarray],
     initial_state: State[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
@@ -206,7 +206,7 @@ def require_float64(mapping: Mapping[str, Tnsr]):
 
 
 def _diffeqdotjl_ode_simulate_inner(
-    dynamics: Dynamics[np.ndarray],
+    dynamics: PureDynamics[np.ndarray],
     initial_state: State[Tnsr],
     timespan: Tnsr,
     atemp_params: ATempParams[Tnsr],
@@ -271,7 +271,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
 
 def diffeqdotjl_simulate_trajectory(
-    dynamics: Dynamics[np.ndarray],
+    dynamics: PureDynamics[np.ndarray],
     initial_state: State[Tnsr],
     timespan: Tnsr,
     **kwargs,
@@ -281,7 +281,7 @@ def diffeqdotjl_simulate_trajectory(
 
 def diffeqdotjl_simulate_to_interruption(
     interruptions: List[Interruption],
-    dynamics: Dynamics[np.ndarray],
+    dynamics: PureDynamics[np.ndarray],
     initial_state: State[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
@@ -302,7 +302,7 @@ def diffeqdotjl_simulate_to_interruption(
 
 
 def diffeqdotjl_simulate_point(
-    dynamics: Dynamics[np.ndarray],
+    dynamics: PureDynamics[np.ndarray],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,

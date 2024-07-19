@@ -1,33 +1,29 @@
 from typing import TypeVar, Generic, Optional
-from chirho_diffeqpy import Dynamics, ATempParams, DiffEqPy
+from chirho_diffeqpy import PureDynamics, ATempParams, DiffEqPy
 from chirho.dynamical.ops import simulate, State
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.messenger import block_messengers
 from deepdiff import DeepDiff
+from torch import Tensor as Tnsr
+import pyro
+import torch
 
-T = TypeVar("T")
 
+class MockDynamicsClosureAbstract(pyro.nn.PyroModule):
+    """
+    Used in tandem with DiffEqPyMockClosureCapable to enable closure-style dispatch of simulate.
+    """
+    def __init__(self, pure_dynamics: PureDynamics[Tnsr], *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class MockDynamicsClosureAbstract(Generic[T]):
-    def __init__(self, dynamics: Dynamics[T]):
-        self.dynamics = dynamics
+        self.pure_dynamics = pure_dynamics
 
     @property
     def atemp_params(self):
         raise NotImplementedError()
 
-    def __call__(self, state: State[T], atemp_params: ATempParams[T]) -> State[T]:
-        return self.dynamics(state, atemp_params)
-
-
-class MockDynamicsClosureDirectPass(MockDynamicsClosureAbstract[T]):
-    def __init__(self, dynamics: Dynamics[T], atemp_params: ATempParams[T]):
-        super().__init__(dynamics)
-        self._atemp_params = atemp_params
-
-    @property
-    def atemp_params(self):
-        return self._atemp_params
+    def forward(self, state: State[Tnsr], atemp_params: ATempParams[Tnsr]) -> State[Tnsr]:
+        return self.pure_dynamics(state, atemp_params)
 
 
 class DiffEqPyMockClosureCapable(DiffEqPy):

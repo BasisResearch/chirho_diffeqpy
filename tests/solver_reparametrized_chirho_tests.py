@@ -158,10 +158,10 @@ torch.set_default_dtype(torch.float64)
 
 # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
 # See also, in test_solver: FIXME hk0jd16g.
-# Unused import to register the lang_interop machinery.
+# Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
 from chirho_diffeqpy.lang_interop import julianumpy
 
-# Also, import the global and per_test parametrizations.
+# Also, import the global and per_test to register those dispatched reparametrizations.
 import chirho_tests_reparametrized.global_reparametrizations
 import chirho_tests_reparametrized.per_test_reparametrizations
 
@@ -174,6 +174,7 @@ retcode = pytest.main(
         f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
         f"{chirho_root_path}/tests/dynamical/test_solver.py",
         f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
+        # f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
