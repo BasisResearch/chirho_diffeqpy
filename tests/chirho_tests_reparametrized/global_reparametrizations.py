@@ -27,8 +27,8 @@ def _(*args, **kwargs):
 # Given the TorchDiffEq class itself...
 @reparametrize_argument_by_value.register(TorchDiffEq)
 def _(*args, **kwargs):
-    # ...return the MockClosure capable DiffEqPy solver class itself.
-    return DiffEqPyMockClosureCapable
+    # ...still return an instance. See DiffEqPyMockClosureCapable.__call__ for the rationale.
+    return DiffEqPyMockClosureCapable()
 # </Solver>
 
 

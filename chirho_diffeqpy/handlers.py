@@ -21,11 +21,11 @@ MappingShapePair = Tuple[MappingShape, MappingShape]
 
 class DiffEqPy(Solver[Tnsr]):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__()
 
         # Add solver arguments to init sig and put them here as needed. They will be passed along below.
-        self.solve_kwargs = dict()
+        self.solve_kwargs = kwargs
 
         # Lazily compile solvers used in this context. Compilations are organized first by the dynamics function
         #  object itself, and then by the shapes of the (prebroadcasted) state and atemp_params that have been

@@ -51,6 +51,10 @@ def _reparametrize_args(args: Tuple, test_id: Optional[str] = None) -> Optional[
         try:
             new_arg = reparametrize_argument(arg, scope=test_id)
         except NotImplementedError:
+            # These are required to convert.
+            # TODO maybe raise for a list of things and types that we require conversions for?
+            if isinstance(arg, Solver):
+                raise
             # TODO figure out a way to report whether a failed test had failed conversions? Or something to point
             #  the user to the fact that the test might have failed because the reparametrization failed.
             new_arg = arg  # just don't convert if not implemented.
@@ -167,8 +171,8 @@ import chirho_tests_reparametrized.per_test_reparametrizations
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        # f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
-        # f"{chirho_root_path}/tests/dynamical/test_solver.py",
+        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        f"{chirho_root_path}/tests/dynamical/test_solver.py",
         f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
