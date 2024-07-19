@@ -21,7 +21,14 @@ class _SingleDispatcherOnValue:
         self.default_func = default_func
 
     def __call__(self, value: object, *args, testid: Optional[str] = None, argnames: Optional[str] = None, **kwargs):
-        func = self.registry.get(value, None)
+        try:
+            func = self.registry.get(value, None)
+        except TypeError as e:
+            # See error reporting in the register method below.
+            if "unhashable type" in str(e):
+                func = None
+            else:
+                raise
 
         if func is None:
             return self.default_func(value, *args, **kwargs)
@@ -30,7 +37,13 @@ class _SingleDispatcherOnValue:
 
     def register(self, value: object):
         def decorator(func: Callable):
-            self.registry[value] = func
+            try:
+                self.registry[value] = func
+            except TypeError as e:
+                if "unhashable type" in str(e):
+                    raise TypeError(f"Value {value} is not hashable, and cannot be used for singledispatch_on_value."
+                                    f" You can either use type dispatch, or use type dispatch on the unhashable form "
+                                    f" and convert to a hashable form, then dispatch by value on the hashable form.")
             return func
 
         return decorator

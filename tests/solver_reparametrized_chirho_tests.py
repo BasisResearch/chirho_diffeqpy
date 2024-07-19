@@ -34,11 +34,8 @@ def _metafunc_includes_solver(metafunc) -> bool:
 
 
 def _is_arg_group(args) -> bool:
-    try:
-        iter(args)
-        return True
-    except TypeError:
-        return False
+    istuple = isinstance(args, tuple)
+    return istuple
 
 
 # TODO gnwg18fk may want to include arg_names here and have some kind of nested scope, or multi-scope lookup. Otherwise,
@@ -53,8 +50,10 @@ def _reparametrize_args(args: Tuple, test_id: Optional[str] = None) -> Optional[
     for arg in args:
         try:
             new_arg = reparametrize_argument(arg, scope=test_id)
-        # except NotImplementedError:
-        #     new_arg = arg  # just don't convert if not implemented.
+        except NotImplementedError:
+            # TODO figure out a way to report whether a failed test had failed conversions? Or something to point
+            #  the user to the fact that the test might have failed because the reparametrization failed.
+            new_arg = arg  # just don't convert if not implemented.
         except Exception as e:
             raise NotImplementedError(
                 f"Tried to reparametrize argument {arg} in test {test_id}, but failed with unexpected exception {e}."
@@ -168,8 +167,9 @@ import chirho_tests_reparametrized.per_test_reparametrizations
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        # f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
         # f"{chirho_root_path}/tests/dynamical/test_solver.py",
+        f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
