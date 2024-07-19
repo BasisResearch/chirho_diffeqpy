@@ -1,5 +1,11 @@
 import pytest
 import juliacall  # Must precede even indirect torch imports to prevent segfault.
+import torch
+
+# DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
+# Note that, for unknown reasons, this has to precede all certain imports or it "doesn't take" and we get float32s.
+torch.set_default_dtype(torch.float64)
+
 import chirho
 import sys
 import os.path as osp
@@ -9,7 +15,6 @@ from chirho.dynamical.handlers.solver import Solver
 from chirho_tests_reparametrized.reparametrization import reparametrize_argument
 import inspect
 from typing import List, Tuple, Optional
-import torch
 from functools import wraps
 
 
@@ -152,10 +157,6 @@ class ReparametrizeWithDiffEqPySolver:
         print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
               f"solver, but not yet figured out how to dynamically skip individual tests.")
 
-
-# DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
-torch.set_default_dtype(torch.float64)
-
 # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
 # See also, in test_solver: FIXME hk0jd16g.
 # Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
@@ -171,9 +172,9 @@ import chirho_tests_reparametrized.per_test_reparametrizations
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        # f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
-        # f"{chirho_root_path}/tests/dynamical/test_solver.py",
-        # f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
+        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        f"{chirho_root_path}/tests/dynamical/test_solver.py",
+        f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
         f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.

@@ -25,3 +25,7 @@ from tests.dynamical.dynamical_fixtures import (
 from tests.dynamical.test_handler_composition import (
     UnifiedFixtureDynamicsReparam,
 )
+# noinspection PyUnresolvedReferences
+from tests.dynamical.test_static_observation import (
+    RandBetaUnifiedFixtureDynamics,
+)

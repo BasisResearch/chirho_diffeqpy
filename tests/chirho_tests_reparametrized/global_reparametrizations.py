@@ -8,7 +8,8 @@ from .fixtures_imported_from_chirho import (
     UnifiedFixtureDynamics,
     bayes_sir_model,
     sir_param_prior,
-    UnifiedFixtureDynamicsReparam
+    UnifiedFixtureDynamicsReparam,
+    RandBetaUnifiedFixtureDynamics
 )
 from chirho.dynamical.handlers.solver import Solver
 from .reparametrization import reparametrize_argument_by_value, reparametrize_argument_by_type
@@ -48,4 +49,17 @@ def generate_diffeqpy_bayes_sir_model(dispatch_arg, *args, **kwargs):
 def _(dispatch_arg, *args, **kwargs):
     # ...return a function that converts the returned model to a mock closure.
     return lambda: generate_diffeqpy_bayes_sir_model(dispatch_arg())
+
+
+# Given the specific fixture dynamics subclass itself...
+@reparametrize_argument_by_value.register(RandBetaUnifiedFixtureDynamics)
+def _(dispatch_arg, *args, **kwargs):
+    assert dispatch_arg is RandBetaUnifiedFixtureDynamics
+    # ...return a class that overrides its forward (by preceding in MRO) but allows it to specify
+    #  its special getter for the beta parameter.
+    class MockClosureRandBetaUnifiedFixtureDynamics(MockClosureUnifiedFixtureDynamics, RandBetaUnifiedFixtureDynamics):
+        pass
+
+    return MockClosureRandBetaUnifiedFixtureDynamics
+
 # </Dynamics>
