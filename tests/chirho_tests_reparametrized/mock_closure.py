@@ -29,23 +29,19 @@ class MockDynamicsClosureDirectPass(MockDynamicsClosureAbstract[T]):
         return self._atemp_params
 
 
-class _MockDynamicsClosureHandler(Messenger):
-
-    # noinspection PyMethodMayBeStatic
-    def _pyro_simulate(self, msg: dict) -> None:
-
-        dynamics = msg["args"]
-
-        if isinstance(dynamics, MockDynamicsClosureAbstract):
-            with block_messengers(lambda m: isinstance(m, _MockDynamicsClosureHandler)):
-                msg["value"] = simulate(dynamics, msg["args"][1:], **msg["kwargs"], atemp_params=dynamics.atemp_params)
-                msg["done"] = True
-        # Otherwise, this will propagate to the default implementation.
-
-
-class DiffEqPyMockClosureCapable(DiffEqPy, _MockDynamicsClosureHandler):
+class DiffEqPyMockClosureCapable(DiffEqPy):
     """
     This enables closure-style dispatch of simulate, which allows us to operate with the same dynamics/parameter
     coupling that the chirho tests use by defining dynamics as torch modules.
     """
-    pass
+
+    # noinspection PyMethodMayBeStatic,PyFinal
+    def _pyro_simulate(self, msg: dict) -> None:
+        dynamics = msg["args"][0]
+
+        if isinstance(dynamics, MockDynamicsClosureAbstract):
+            if "atemp_params" in msg["kwargs"]:
+                raise ValueError("MockDynamicsClosureAbstract instances should not have atemp_params passed in "
+                                 "to simulate, but rather exposed via the overriden atemp_params property.")
+            msg["kwargs"]["atemp_params"] = dynamics.atemp_params
+            return super()._pyro_simulate(msg)

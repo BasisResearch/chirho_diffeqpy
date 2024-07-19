@@ -24,7 +24,7 @@ class _SingleDispatcherOnValue:
         func = self.registry.get(value, None)
 
         if func is None:
-            self.default_func(value, *args, **kwargs)
+            return self.default_func(value, *args, **kwargs)
         else:
             return func(value, *args, **kwargs)
 

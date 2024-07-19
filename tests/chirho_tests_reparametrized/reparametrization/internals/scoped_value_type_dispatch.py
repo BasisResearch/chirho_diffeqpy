@@ -21,7 +21,8 @@ def _create_get__dispatch_scope(scope: str):
     def by_value(dispatch_arg, *args, **kwargs):
         # 2. And if no specific dispatcher is found for the specific value, we fall back to the default implementation
         #  here, which tries type dispatch.
-        by_type(dispatch_arg, *args, **kwargs)
+        # return _scopes[scope][-1](dispatch_arg, *args, **kwargs)
+        return by_type(dispatch_arg, *args, **kwargs)
 
     _scopes[scope] = by_value, by_type
     return by_value, by_type
@@ -31,7 +32,7 @@ def _create_get__dispatch_scope(scope: str):
 _global_by_value, _ = _create_get__dispatch_scope("global")
 
 
-class _ReparametrizeByScope:
+class _ReparametrizeWithinScope:
     """
     Reparametrize according to a particular scope, falling back to the global scope if the dispatch fails and
     the scope wasn't already global.
@@ -51,12 +52,12 @@ class _ReparametrizeByScope:
 
             # Otherwise, try again explicitly at the global level.
             try:
-                _global_by_value(dispatch_arg, *args, **kwargs)
+                return _global_by_value(dispatch_arg, *args, **kwargs)
             except NotImplementedError:
                 raise NotImplementedError(fail_msg)
 
 
-class _ReparametrizeArgument(_ReparametrizeByScope):
+class _ReparametrizeArgument(_ReparametrizeWithinScope):
     """
     A thin wrapper that is provides a register decorator akin to singledispatch's register, but for value dispatch.
     Also is callable, see _ReparametrizeByScope.
@@ -74,7 +75,7 @@ class _ReparametrizeArgument(_ReparametrizeByScope):
         return decorator
 
 
-class _ReparametrizeArgumentByType(_ReparametrizeByScope):
+class _ReparametrizeArgumentByType(_ReparametrizeWithinScope):
     """
     A thin wrapper that provides a register decorator matching the singledispatch register decorator.
     """

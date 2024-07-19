@@ -214,6 +214,10 @@ def _diffeqdotjl_ode_simulate_inner(
     **kwargs
 ) -> State[torch.tensor]:
 
+    if not isinstance(atemp_params, dict):
+        raise ValueError(f"atemp_params must be a dictionary, "
+                         f"but got type {type(atemp_params)} and value {atemp_params}")
+
     require_float64(initial_state)
     require_float64(atemp_params)
 

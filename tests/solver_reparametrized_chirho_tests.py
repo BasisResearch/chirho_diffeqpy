@@ -3,46 +3,66 @@ import juliacall  # Must precede even indirect torch imports to prevent segfault
 import chirho
 import sys
 import os.path as osp
-# from chirho_diffeqpy import DiffEqPy
+from chirho_diffeqpy import DiffEqPy
 from chirho_tests_reparametrized.fixtures_imported_from_chirho import chirho_root_path
 from chirho.dynamical.handlers.solver import Solver
-from chirho_tests_reparametrized.reparametrizations import reparametrize_argument
+from chirho_tests_reparametrized.reparametrization import reparametrize_argument
 import inspect
 from typing import List, Tuple, Optional
 import torch
 from functools import wraps
 
 
-def _reparametrize_args(args: Tuple, test_id: Optional[str] = None, arg_names: Optional[str] = None) -> Optional[Tuple]:
-
-    # Look for any instances or subclasses of Solver in the args. If there is one, then this test should
-    #  be reparametrized. TODO this won't recurse into collections that contain solvers.
-    has_parametrized_solver = (
+def _args_include_solver(args: Tuple) -> bool:
+    args = (args,) if not isinstance(args, tuple) else args
+    return (
         # check for solver instances
         any(isinstance(arg, Solver) for arg in args)
         # check for solver types
         | any(inspect.isclass(arg) and issubclass(arg, Solver) for arg in args)
     )
 
-    # If there is no reparametrization required, return None.
-    if not has_parametrized_solver:
-        return None
 
-    # Otherwise, reparametrize all the args.
+def _marker_includes_solver(marker) -> bool:
+    args_list = marker.args[1]
+    return any(_args_include_solver(args) for args in args_list)
+
+
+def _metafunc_includes_solver(metafunc) -> bool:
+    markers = metafunc.definition.own_markers
+    return any(_marker_includes_solver(marker) for marker in markers)
+
+
+def _is_arg_group(args) -> bool:
+    try:
+        iter(args)
+        return True
+    except TypeError:
+        return False
+
+
+# TODO gnwg18fk may want to include arg_names here and have some kind of nested scope, or multi-scope lookup. Otherwise,
+#  there is no way to specify different conversions when e.g. two different lambdas parametrize two different arguments
+#  in the same test.
+def _reparametrize_args(args: Tuple, test_id: Optional[str] = None) -> Optional[Tuple]:
+
+    og_args_is_just_arg = not _is_arg_group(args)
+    args = (args,) if og_args_is_just_arg else args
+
     new_args = []
     for arg in args:
-
         try:
-            new_arg = reparametrize_argument(arg, test_id=test_id, arg_names=arg_names)
+            new_arg = reparametrize_argument(arg, scope=test_id)
+        # except NotImplementedError:
+        #     new_arg = arg  # just don't convert if not implemented.
         except Exception as e:
             raise NotImplementedError(
-                f"Found a solver to reparametrize, but could not reparametrize argument "
-                f" {arg}. \n Original exception:\n {e}"
+                f"Tried to reparametrize argument {arg} in test {test_id}, but failed with unexpected exception {e}."
             ) from e
 
         new_args.append(new_arg)
 
-    return tuple(new_args)
+    return tuple(new_args) if not og_args_is_just_arg else new_args[0]
 
 
 def _reparametrize_markers_in_place(metafunc) -> bool:
@@ -52,8 +72,7 @@ def _reparametrize_markers_in_place(metafunc) -> bool:
     test_file, test_line, test_name = metafunc.definition.location
     test_id = metafunc.definition.nodeid
 
-    reparametrized_any_marker = False
-
+    # TODO First, identify if any of the markers
     for marker in markers:
 
         # We can only reparametrize args of parametrize markers.
@@ -73,34 +92,16 @@ def _reparametrize_markers_in_place(metafunc) -> bool:
         #  then that solver will appear multiple times in the args_list, and be converted accordingly to a DiffEqPy
         #  solver. The pytest parametrizations though will have specified the same tests for different solvers, so here,
         #  this will result in redundant tests for all of those repeated cases where only the solver was varied.
+        # Also, TODO gnwg18fk.
         try:
-            reparametrized_args_list = [_reparametrize_args(args, test_id=test_id, arg_names=args_name_str)
-                                        for args in args_list]
-        except NotImplementedError as e:
-            raise NotImplementedError(f"Could not reparametrize a solver argument in a parametrize marker for test "
-                                      f"{test_name} at {test_file}:{test_line} with parametrized arguments "
-                                      f"{args_name_str} = {args_list}. \n Original exception:\n {e}") from e
-
-        # Require that either all the args required reparametrization, or none of them did.
-        was_reparametrized_per_arg = [p is not None for p in reparametrized_args_list]
-        all_processed = all(was_reparametrized_per_arg)
-        none_processed = not any(was_reparametrized_per_arg)
-
-        if not (all_processed | none_processed):
-            raise ValueError("Either all args in a parametrize marker must require reparametrization, or none of them."
-                             " This can happen if some args involve a Solver instance or type while others do not."
-                             f" Test {test_name} at {test_file}:{test_line} with parametrized arguments "
-                             f"{args_name_str} = {args_list}.")
-
-        if none_processed:
-            continue
+            reparametrized_args_list = [_reparametrize_args(args, test_id=test_id) for args in args_list]
+        except Exception as e:
+            raise Exception(f"Errored while trying to reparametrize a solver argument in a parametrize marker for test "
+                            f"{test_name} at {test_file}:{test_line} with parametrized arguments "
+                            f"{args_name_str} = {args_list}. \n Original exception:\n {e}") from e
 
         args_list.clear()
         args_list.extend(reparametrized_args_list)
-
-        reparametrized_any_marker = True
-
-    return reparametrized_any_marker
 
 
 # def _skip_wrapper(f):
@@ -117,45 +118,49 @@ class ReparametrizeWithDiffEqPySolver:
     @staticmethod
     def pytest_generate_tests(metafunc):
 
-        # This logic reparametrizes any chirho tests that have 1) a solver parametrization that 2) includes the
-        #  Solver type or instance as an argument. Then 3) reparametrizes the arguments accordingly to work with
-        #  DiffEqPy and pure dynamics functions.
-        reparametrized_any_marker = _reparametrize_markers_in_place(metafunc)
+        if _metafunc_includes_solver(metafunc):
+            _reparametrize_markers_in_place(metafunc)
+            return
 
-        if not reparametrized_any_marker:
-            # Doesn't work, skips whole module.
-            # pytest.skip("No solver parametrization marker found to reparametrize. This test would not exercise the"
-            #             " DiffEqPy solver backend.")
+        # TODO Otherwise, skip this test.
 
-            # Doesn't work, doesn't change anything.
-            # metafunc.definition.add_marker(pytest.mark.skip(
-            #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
-            #            " DiffEqPy solver backend."
-            # ))
+        # Doesn't work, skips whole module.
+        # pytest.skip("No solver parametrization marker found to reparametrize. This test would not exercise the"
+        #             " DiffEqPy solver backend.")
 
-            # Doesn't work, doesn't change anything and skip never gets called.
-            # metafunc.function = _skip_wrapper
+        # Doesn't work, doesn't change anything.
+        # metafunc.definition.add_marker(pytest.mark.skip(
+        #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
+        #            " DiffEqPy solver backend."
+        # ))
 
-            # Also doesn't work. Also tries to use an internal pytest
-            # metafunc.definition.own_markers.clear()
-            # skip_mark = pytest.Mark(name="skip", args=tuple(), kwargs=dict(
-            #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
-            #            " DiffEqPy solver backend."
-            # ))
-            # metafunc.definition.own_markers.append(skip_mark)
+        # Doesn't work, doesn't change anything and skip never gets called.
+        # metafunc.function = _skip_wrapper
 
-            # TODO warnings module.
-            print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
-                  f"solver, but not yet figured out how to dynamically skip individual tests.")
+        # Also doesn't work. Also tries to use an internal pytest
+        # metafunc.definition.own_markers.clear()
+        # skip_mark = pytest.Mark(name="skip", args=tuple(), kwargs=dict(
+        #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
+        #            " DiffEqPy solver backend."
+        # ))
+        # metafunc.definition.own_markers.append(skip_mark)
+
+        # TODO warnings module.
+        print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
+              f"solver, but not yet figured out how to dynamically skip individual tests.")
 
 
 # DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
 torch.set_default_dtype(torch.float64)
 
 # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
-# See also # FIXME hk0jd16g in test_solver.
+# See also, in test_solver: FIXME hk0jd16g.
 # Unused import to register the lang_interop machinery.
 from chirho_diffeqpy.lang_interop import julianumpy
+
+# Also, import the global and per_test parametrizations.
+import chirho_tests_reparametrized.global_reparametrizations
+import chirho_tests_reparametrized.per_test_reparametrizations
 
 
 # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
@@ -163,8 +168,8 @@ from chirho_diffeqpy.lang_interop import julianumpy
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        # f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
-        f"{chirho_root_path}/tests/dynamical/test_solver.py",
+        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        # f"{chirho_root_path}/tests/dynamical/test_solver.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding

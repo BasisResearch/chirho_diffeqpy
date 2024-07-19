@@ -1,5 +1,5 @@
 # noinspection PyProtectedMember
-from internals.scoped_value_type_dispatch import _ReparametrizeArgument, _ReparametrizeArgumentByType
+from .internals.scoped_value_type_dispatch import _ReparametrizeArgument, _ReparametrizeArgumentByType
 
 reparametrize_argument_by_value = _ReparametrizeArgument()
 reparametrize_argument_by_type = _ReparametrizeArgumentByType()

@@ -13,7 +13,7 @@ sys.path.insert(0, chirho_root_path)
 
 # noinspection PyUnresolvedReferences
 from tests.dynamical.dynamical_fixtures import (
-    pure_sir_dynamics,
+    # pure_sir_dynamics,  # not using b/c uses torch.sin, see # TODO md7291jdmd
     SIRObservationMixin,
     SIRReparamObservationMixin,
     UnifiedFixtureDynamics,
