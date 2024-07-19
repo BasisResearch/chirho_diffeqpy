@@ -1,3 +1,5 @@
+raise NotImplementedError("deprecated (hopefully forever)")
+
 from .reparam_test_log_trajectory import *
 from .reparam_test_solver import *
 

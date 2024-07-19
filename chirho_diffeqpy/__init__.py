@@ -1,2 +1,2 @@
 from .handlers import DiffEqPy
-from .internals import ATempParams
+from .internals import ATempParams, Dynamics

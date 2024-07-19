@@ -1,9 +1,32 @@
 from functools import singledispatch
-from .fixtures_imported_from_chirho import UnifiedFixtureDynamics
+from .fixtures_imported_from_chirho import (
+    pure_sir_dynamics,
+    SIRObservationMixin,
+    SIRReparamObservationMixin,
+    UnifiedFixtureDynamics,
+    bayes_sir_model,
+    sir_param_prior,
+    UnifiedFixtureDynamicsReparam
+)
 from chirho.dynamical.handlers.solver import Solver
 from chirho_diffeqpy import DiffEqPy
-from .fixtures import sir_dynamics, sample_sir_params
 from .per_test_reparametrization import per_test_reparametrization
+from .singledispatch_on_value_and_test_arg import valuedispatch
+
+
+# 1. Reparametrization starts with an attempt at value dispatch on a per-test/per-arg basis, which then falls
+#  back to a general value dispatch.
+@valuedispatch
+def reparametrize_argument(dispatch_arg, *args, **kwargs):
+    # 2. And if no specific dispatcher is found for the test/arg pair or the value generally,
+    #  we fall back to type dispatch, which is handled with _reparametrize_argument_by_type
+    try:
+
+
+
+@singledispatch
+def _reparametrize_argument_by_type(dispatch_arg, *args, **kwargs):
+    pass
 
 
 @singledispatch

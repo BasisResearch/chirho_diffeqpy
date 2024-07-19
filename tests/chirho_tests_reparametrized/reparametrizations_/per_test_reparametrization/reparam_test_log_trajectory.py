@@ -1,5 +1,4 @@
-# TODO can we make these also single dispatch mechanisms that are only loaded for specific tests?
-# TODO cz right now these will need to handle all their own dispatching via switch statements etc.
+
 
 def test_log_trajectory__test_start_end_time_collisions(
         lambda_dynamics,
