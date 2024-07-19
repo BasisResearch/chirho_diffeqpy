@@ -171,10 +171,10 @@ import chirho_tests_reparametrized.per_test_reparametrizations
 retcode = pytest.main(
     [
         # TODO WIP expand to all dynamical tests.
-        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
-        f"{chirho_root_path}/tests/dynamical/test_solver.py",
-        f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
-        # f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
+        # f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+        # f"{chirho_root_path}/tests/dynamical/test_solver.py",
+        # f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
+        f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding

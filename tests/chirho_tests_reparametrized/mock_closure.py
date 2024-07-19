@@ -46,9 +46,10 @@ class DiffEqPyMockClosureCapable(DiffEqPy):
     def __call__(self, fn=None, **kwargs):
         """
         A hack for tests that returns self if this entity is being called in a context where it was reparametrized
-        for its type. This lets us pass one solver instance into a test that expects Solver types, so that compilation
-        is performed once wrt the entire chirho test.
-        Note that the nuances of the compilation and caching are tested internally, and not via the chirho tests.
+         for its type. This lets us pass one solver INSTANCE into a test that expects Solver TYPES, so that compilation
+         is performed in one scope wrt the entire chirho test.
+        Note that the nuances of the compilation and caching are tested internally in this repo,
+         and not via the chirho tests.
         """
         # This is likely being called as a handler, and needs to
         if fn is not None:
