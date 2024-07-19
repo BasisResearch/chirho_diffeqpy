@@ -57,9 +57,8 @@ def pre_broadcast(
 
     # Now, we just want to broadcast the initial state to the shape of the output. To do so, we can just add zeros_like
     #  output to the initial_state.
-    broadcasted_initial_state = {k: initial_state_torch[k] + np.zeros_like(torch.tensor(output[k]))
+    broadcasted_initial_state = {k: initial_state_torch[k] + torch.zeros(output[k].shape)
                                  for k, v in initial_state_torch.items()}
-
     return broadcasted_initial_state
 
 

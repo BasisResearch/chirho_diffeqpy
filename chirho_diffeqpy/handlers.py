@@ -4,9 +4,10 @@ from typing import TypeVar, Dict, Tuple
 
 import torch
 
-from chirho.dynamical.internals.solver import Solver
+from chirho.dynamical.internals.solver import Solver, Dynamics
 from .internals import ATempParams, pre_broadcast, get_mapping_shape, MappingShape
 from copy import copy
+from torch import Tensor as Tnsr
 
 from diffeqpy import de
 
@@ -18,14 +19,23 @@ ATEMPPARAMS_KEY = "atemp_params"
 MappingShapePair = Tuple[MappingShape, MappingShape]
 
 
-class DiffEqPy(Solver[torch.Tensor]):
+class DiffEqPy(Solver[Tnsr]):
 
     def __init__(self):
         super().__init__()
 
+        # Add solver arguments to init sig and put them here as needed. They will be passed along below.
         self.solve_kwargs = dict()
-        self._lazily_compiled_solvers_by_shape: Dict[MappingShapePair, de.ODEProblem] = dict()
-        self._dynamics_that_solver_was_compiled_with = None
+
+        # Lazily compile solvers used in this context. Compilations are organized first by the dynamics function
+        #  object itself, and then by the shapes of the (prebroadcasted) state and atemp_params that have been
+        #  compiled for.
+        self._lazily_compiled_solvers: Dict[Dynamics[Tnsr], Dict[MappingShapePair, de.ODEProblem]] = dict()
+
+    def _get_or_create_compilations_for_dynamics(self, dynamics: Dynamics[Tnsr]):
+        if dynamics not in self._lazily_compiled_solvers:
+            self._lazily_compiled_solvers[dynamics]: Dict[MappingShapePair, de.ODEProblem] = dict()
+        return self._lazily_compiled_solvers[dynamics]
 
     @staticmethod
     def _get_atemp_params_from_msg(msg) -> (ATempParams, Dict):
@@ -105,24 +115,17 @@ class DiffEqPy(Solver[torch.Tensor]):
         atemp_params_shape = get_mapping_shape(atemp_params)
         problem_shape = (initial_state_shape, atemp_params_shape)
 
-        if self._dynamics_that_solver_was_compiled_with is None:
-            self._dynamics_that_solver_was_compiled_with = dynamics
-        elif dynamics is not self._dynamics_that_solver_was_compiled_with:
-            raise ValueError(
-                "Lazily compiling a solver for a different dynamics than the one that was previously compiled."
-                " This is implicitly asking for a recompilation of the underlying ODEProblem. Instead, create"
-                f" a new {DiffEqPy.__name__} solver instance and simulate with the new dynamics in that context."
-            )
-
         # TODO this also should check to make sure that compilation kwargs are the same as the ones that were used
-        #  to compile the solver.
+        #  to compile the solver? Or put those kwargs in the compilation mapping somewhere.
 
-        if problem_shape not in self._lazily_compiled_solvers_by_shape:
+        lazily_compiled_solver_by_shape = self._get_or_create_compilations_for_dynamics(dynamics)
+
+        if problem_shape not in lazily_compiled_solver_by_shape:
             from chirho_diffeqpy.internals import diffeqdotjl_compile_problem
 
-            self._lazily_compiled_solvers_by_shape[problem_shape] = diffeqdotjl_compile_problem(
+            lazily_compiled_solver_by_shape[problem_shape] = diffeqdotjl_compile_problem(
                 dynamics, initial_state, start_time, end_time, atemp_params=atemp_params, **kwargs
             )
 
-        msg["value"] = self._lazily_compiled_solvers_by_shape[problem_shape]
+        msg["value"] = lazily_compiled_solver_by_shape[problem_shape]
         msg["done"] = True
