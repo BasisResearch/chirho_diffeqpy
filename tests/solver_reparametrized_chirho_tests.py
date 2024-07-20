@@ -35,7 +35,7 @@ def _marker_includes_solver(marker) -> bool:
 
 def _metafunc_includes_solver(metafunc) -> bool:
     markers = metafunc.definition.own_markers
-    return any(_marker_includes_solver(marker) for marker in markers)
+    return any(_marker_includes_solver(marker) for marker in markers if marker.name == "parametrize")
 
 
 def _is_arg_group(args) -> bool:
@@ -176,6 +176,7 @@ retcode = pytest.main(
         f"{chirho_root_path}/tests/dynamical/test_solver.py",
         f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
         f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
+        f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding

@@ -32,6 +32,10 @@ class DiffEqPy(Solver[Tnsr]):
         #  compiled for.
         self._lazily_compiled_solvers: Dict[Dynamics[Tnsr], Dict[MappingShapePair, de.ODEProblem]] = dict()
 
+        # Lazily compile event fns used in this context. Compilations are organized first by the event function object
+        #  and then by the shapes of the (prebroadcasted)
+        # TODO
+
     def _get_or_create_compilations_for_dynamics(self, dynamics: Dynamics[Tnsr]):
         if dynamics not in self._lazily_compiled_solvers:
             self._lazily_compiled_solvers[dynamics]: Dict[MappingShapePair, de.ODEProblem] = dict()

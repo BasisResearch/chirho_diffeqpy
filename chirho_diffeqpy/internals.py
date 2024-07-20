@@ -6,6 +6,7 @@ from diffeqpy import de
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
+from chirho.dynamical.handlers.interruption import StaticEvent
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 from torch import Tensor as Tnsr
@@ -289,16 +290,35 @@ def diffeqdotjl_simulate_to_interruption(
     **kwargs,
 ) -> Tuple[State[Tnsr], Tnsr, Optional[Interruption]]:
 
-    # TODO TODO implement the actual retrieval of the next interruption (see torchdiffeq_simulate_to_interruption)
+    # Static interruptions can be handled statically, so sort out dynamics from statics.
+    dynamic_interruptions = [
+        interruption for interruption in interruptions
+        if not isinstance(interruption.predicate, StaticEvent)
+    ]
+    static_times = torch.stack([
+        interruption.predicate.time if isinstance(interruption.predicate, StaticEvent) else torch.tensor(torch.inf)
+        for interruption in interruptions
+    ])
 
-    from chirho.dynamical.handlers.interruption import StaticInterruption
-    next_interruption = StaticInterruption(end_time)
+    static_time_min_idx = torch.argmin(static_times)
+    static_end_time = static_times[static_time_min_idx]
+    assert torch.isfinite(static_end_time), "Internal error: static_end_time should be finite. Is end_time non-finite?"
+    static_end_interruption = interruptions[static_time_min_idx]
 
-    value = simulate_point(
-        dynamics, initial_state, start_time, end_time, atemp_params=atemp_params, **kwargs
-    )
-
-    return value, end_time, next_interruption
+    if len(dynamic_interruptions) == 0:
+        # TODO WIP this HAS to be simulate_point in order for trajectory to be logged. This won't work to achieve
+        #  the goal of not having to simulate twice (once to find interruption, and a second time to get trajectory).
+        final_state = simulate_point(
+            dynamics,
+            initial_state,
+            start_time,
+            static_end_time,
+            atemp_params=atemp_params,
+            **kwargs
+        )
+        return final_state, static_end_time, static_end_interruption
+    else:
+        raise NotImplementedError("Dynamic interruptions are not yet implemented.")
 
 
 def diffeqdotjl_simulate_point(
