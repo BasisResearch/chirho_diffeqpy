@@ -1,6 +1,8 @@
 from functools import singledispatch
 from .fixtures import (
     MockClosureUnifiedFixtureDynamics,
+    build_state_reached_pure_event_fn,
+    MockClosureDynamicsDirectPass
 )
 from .fixtures_imported_from_chirho import (
     SIRObservationMixin,
@@ -9,12 +11,17 @@ from .fixtures_imported_from_chirho import (
     bayes_sir_model,
     sir_param_prior,
     UnifiedFixtureDynamicsReparam,
-    RandBetaUnifiedFixtureDynamics
+    RandBetaUnifiedFixtureDynamics,
+    build_event_fn_zero_after_tt,
+    get_state_reached_event_f,
+    model_with_param_in_state
 )
 from chirho.dynamical.handlers.solver import Solver
 from .reparametrization import reparametrize_argument_by_value, reparametrize_argument_by_type
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from .mock_closure import  DiffEqPyMockClosureCapable
+import torch
+import numpy as np
 
 
 # <Solver>
@@ -62,4 +69,35 @@ def _(dispatch_arg, *args, **kwargs):
 
     return MockClosureRandBetaUnifiedFixtureDynamics
 
+
+@reparametrize_argument_by_value.register(model_with_param_in_state)
+def _(*args, **kwargs):
+    return MockClosureDynamicsDirectPass(
+        dynamics=lambda state, atemp_params: model_with_param_in_state(state),
+        atemp_params=dict()
+    )
 # </Dynamics>
+
+
+# <Event Functions>
+@reparametrize_argument_by_value.register(build_event_fn_zero_after_tt)
+def _(dispatch_arg, *args, **kwargs):
+    assert dispatch_arg is build_event_fn_zero_after_tt
+
+    def build_event_fn_zero_after_tt_np(tt: torch.Tensor):
+        tt = tt.item()
+
+        def zero_after_tt(t, state, atemp_params):
+            return tt - t
+
+        return zero_after_tt
+
+    return build_event_fn_zero_after_tt_np
+
+
+@reparametrize_argument_by_value.register(get_state_reached_event_f)
+def _(dispatch_arg, *args, **kwargs):
+    assert dispatch_arg is get_state_reached_event_f
+    return build_state_reached_pure_event_fn
+
+# </Event Functions>

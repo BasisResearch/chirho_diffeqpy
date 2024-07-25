@@ -3,9 +3,12 @@ import torch
 from .fixtures_imported_from_chirho import (
     UnifiedFixtureDynamicsBase,
     SIRObservationMixin,
-    SIRReparamObservationMixin
+    SIRReparamObservationMixin,
+    get_state_reached_event_f
 )
 from .mock_closure import MockDynamicsClosureAbstract
+from chirho_diffeqpy.handlers import State, ATempParams
+from chirho_diffeqpy.internals import to_numpy
 
 
 def isalambda(f):
@@ -54,7 +57,7 @@ class MockClosureUnifiedFixtureDynamicsReparam(MockClosureUnifiedFixtureDynamics
     pass
 
 
-class MockDynamicsClosureDirectPass(MockDynamicsClosureAbstract):
+class MockClosureDynamicsDirectPass(MockDynamicsClosureAbstract):
 
     def __init__(self, dynamics, atemp_params):
         super().__init__(pure_dynamics=dynamics)
@@ -63,3 +66,13 @@ class MockDynamicsClosureDirectPass(MockDynamicsClosureAbstract):
     @property
     def atemp_params(self):
         return self._atemp_params
+
+
+def build_state_reached_pure_event_fn(target_state: State[torch.tensor], event_dim: int = 0):
+    target_state_np = to_numpy(target_state)
+    impure_event_f = get_state_reached_event_f(target_state_np, event_dim)
+
+    def pure_event_f(t: float, state: State[np.ndarray], atemp_params: ATempParams[np.ndarray]):
+        return impure_event_f(t, state)
+
+    return pure_event_f

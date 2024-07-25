@@ -20,6 +20,7 @@ from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamicsBase,
     bayes_sir_model,
     sir_param_prior,
+    build_event_fn_zero_after_tt
 )
 # noinspection PyUnresolvedReferences
 from tests.dynamical.test_handler_composition import (
@@ -28,4 +29,9 @@ from tests.dynamical.test_handler_composition import (
 # noinspection PyUnresolvedReferences
 from tests.dynamical.test_static_observation import (
     RandBetaUnifiedFixtureDynamics,
+)
+# noinspection PyUnresolvedReferences
+from tests.dynamical.test_dynamic_interventions import (
+    get_state_reached_event_f,
+    model_with_param_in_state
 )
