@@ -265,8 +265,7 @@ def _diffeqdotjl_ode_simulate_inner(
     atemp_params: ATempParams[Tnsr],
     _diffeqdotjl_callback: Optional[de.CallbackSet] = None,
     **kwargs
-# ) -> Tuple[State[torch.Tensor], State[torch.Tensor], torch.Tensor]:
-) -> State[torch.Tensor]:
+) -> Tuple[State[torch.Tensor], State[torch.Tensor], torch.Tensor]:
 
     # if not torch.all(timespan[:-1] < timespan[1:]):
     #     raise ValueError("The requested times must be sorted and strictly increasing.")
@@ -365,8 +364,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
     # If no dynamic interventions could have fired, just return the traj.
     if _diffeqdotjl_callback is None:
-        # return requested_traj, final_state, end_t
-        return requested_traj
+        return requested_traj, final_state, end_t
 
     # If a dynamic event was fired, then end_t will precede logging elements in the timespan, so sol(tspan) will just
     # return the end state for any interpolation times that preceeded the end time. We don't want to return anything
@@ -380,8 +378,7 @@ def _diffeqdotjl_ode_simulate_inner(
     pre_event_requested_traj = {k: v[..., pre_event_mask] for k, v in requested_traj.items()}
     # print("pre_event_requested_traj", pre_event_requested_traj)
 
-    # return pre_event_requested_traj, final_state, end_t
-    return pre_event_requested_traj
+    return pre_event_requested_traj, final_state, end_t
 
 
 def diffeqdotjl_simulate_trajectory(
@@ -390,8 +387,7 @@ def diffeqdotjl_simulate_trajectory(
     timespan: Tnsr,
     **kwargs,
 ) -> State[Tnsr]:
-    # requested_traj, final_State, end_t = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
-    requested_traj = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+    requested_traj, final_State, end_t = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
     return requested_traj
 
 
@@ -478,21 +474,10 @@ def diffeqdotjl_simulate_point(
 ) -> State[torch.Tensor]:
 
     timespan = torch.stack((start_time, end_time))
-    # requested_trajectory, final_state, end_t = _diffeqdotjl_ode_simulate_inner(
-    #     dynamics, initial_state, timespan, atemp_params=atemp_params, **kwargs
-    # )
-    trajectory = _diffeqdotjl_ode_simulate_inner(
+    requested_trajectory, final_state, end_t = _diffeqdotjl_ode_simulate_inner(
         dynamics, initial_state, timespan, atemp_params=atemp_params, **kwargs
     )
 
-    # TODO support dim != -1
-    idx_name = "__time"
-    name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
-    name_to_dim[idx_name] = -1
-
-    final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
-    final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-    final_state = _squeeze_time_dim(final_state_traj)
     return final_state
 
 
