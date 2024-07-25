@@ -1,6 +1,7 @@
 from typing import Optional
 import numpy as np
 from functools import singledispatch
+from chirho.indexed.ops import gather
 from juliacall import Main as jl
 
 # TODO refactor the comments here. This solves two problems:
@@ -157,6 +158,12 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
     julia version. See __array_ufunc__ for more details.
     """
 
+    def __array__(self):
+        scalar_arr = np.empty(tuple(), dtype=object)
+        scalar_vec = scalar_arr.ravel()
+        scalar_vec[0] = self
+        return scalar_arr.view(_JuliaThingWrapperArray)
+
     @staticmethod
     def wrap_array(arr: np.ndarray):
         regular_array = np.vectorize(JuliaThingWrapper)(arr)
@@ -225,6 +232,9 @@ class _JuliaThingWrapperArray(np.ndarray):
     underlying object for arrays of dtype object.
     """
 
+    def __array__(self, *args, **kwargs):
+        return super().__array__(*args, **kwargs).view(_JuliaThingWrapperArray)
+
     def __array_ufunc__(self, ufunc, method, *args, **kwargs):
         # First, try to resolve the ufunc in the standard manner (this will dispatch first to dunder methods).
         ret = _default_ufunc(ufunc, method, *args, **kwargs)
@@ -292,3 +302,12 @@ def _(v: np.ndarray):
 @_cast_as_having_array_func.register
 def _(v: _DunderedJuliaThingWrapper):
     return JuliaThingWrapper(v.julia_thing)
+
+
+@gather.register
+def _gather_juliathing_scalar(
+    value: JuliaThingWrapper,
+    *args,
+    **kwargs,
+) -> np.ndarray:
+    return gather(np.array(value), *args, **kwargs)

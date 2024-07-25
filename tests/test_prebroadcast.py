@@ -1,7 +1,7 @@
 import juliacall  # Must precede even indirect torch imports to preventshape segfault.
 import pytest
 import torch
-from chirho_diffeqpy.internals import pre_broadcast
+from chirho_diffeqpy.internals import pre_broadcast_initial_state
 from .fixtures import ab_xy_dynfuncs, ab_xy_prior
 
 
@@ -30,7 +30,7 @@ def test_prebroadcast(
 
     initial_state, atemp_params = ab_xy_prior(xplatesize, yplatesize, aplatesize, bplatesize)
 
-    pre_broadcasted_initial_state = pre_broadcast(func, initial_state, atemp_params)
+    pre_broadcasted_initial_state = pre_broadcast_initial_state(func, initial_state, atemp_params=atemp_params)
 
     non_pre_broadcasted_return = exec_numpy_from_torch(func, initial_state, atemp_params)
     pre_broadcasted_return = exec_numpy_from_torch(func, pre_broadcasted_initial_state, atemp_params)

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from typing import TypeVar, Dict, Tuple
+from typing import TypeVar, Dict, Tuple, Callable
 
 import torch
+import numpy as np
 
-from chirho.dynamical.internals.solver import Solver, Dynamics
-from .internals import ATempParams, pre_broadcast, get_mapping_shape, MappingShape
+from chirho.dynamical.internals.solver import Solver, State, Interruption
+from .internals import (
+    ATempParams,
+    pre_broadcast_initial_state,
+    get_mapping_shape,
+    MappingShape,
+    PureDynamics,
+    PureEventFn
+)
 from copy import copy
 from torch import Tensor as Tnsr
 
@@ -30,16 +38,22 @@ class DiffEqPy(Solver[Tnsr]):
         # Lazily compile solvers used in this context. Compilations are organized first by the dynamics function
         #  object itself, and then by the shapes of the (prebroadcasted) state and atemp_params that have been
         #  compiled for.
-        self._lazily_compiled_solvers: Dict[Dynamics[Tnsr], Dict[MappingShapePair, de.ODEProblem]] = dict()
+        self._lazily_compiled_solvers: Dict[PureDynamics[np.ndarray], Dict[MappingShapePair, de.ODEProblem]] = dict()
 
-        # Lazily compile event fns used in this context. Compilations are organized first by the event function object
-        #  and then by the shapes of the (prebroadcasted)
-        # TODO
+        # Lazily compile event fns used in this context. Compilations are organized first by the interruption object
+        #  and then, as above, by the shapes of the (prebroadcasted) state and atemp_params.
+        self._lazily_compiled_event_fns: Dict[PureEventFn[np.ndarray], Dict[MappingShapePair, de.VectorContinuousCallback]] =\
+            dict()
 
-    def _get_or_create_compilations_for_dynamics(self, dynamics: Dynamics[Tnsr]):
+    def _get_or_create_compilations_for_dynamics(self, dynamics: PureDynamics[Tnsr]):
         if dynamics not in self._lazily_compiled_solvers:
             self._lazily_compiled_solvers[dynamics]: Dict[MappingShapePair, de.ODEProblem] = dict()
         return self._lazily_compiled_solvers[dynamics]
+
+    def _get_or_create_compilations_for_event_fns(self, event_fn: PureEventFn[Tnsr]):
+        if event_fn not in self._lazily_compiled_event_fns:
+            self._lazily_compiled_event_fns[event_fn]: Dict[MappingShapePair, de.VectorContinuousCallback] = dict()
+        return self._lazily_compiled_event_fns[event_fn]
 
     @staticmethod
     def _get_atemp_params_from_msg(msg) -> (ATempParams, Dict):
@@ -107,20 +121,30 @@ class DiffEqPy(Solver[Tnsr]):
     def _pyro_check_dynamics(self, msg) -> None:
         raise NotImplementedError
 
+    @staticmethod
+    def _get_problem_shape(
+            dynamics: PureDynamics[np.ndarray],
+            initial_state: State[Tnsr],
+            atemp_params: ATempParams[Tnsr]
+    ) -> MappingShapePair:
+        # Primarily due to interventions, but also different platings on the parameters, we may have a number of
+        #  different shape requirements. We need to track separate problems that are compiled for each.
+        initial_state = pre_broadcast_initial_state(dynamics, initial_state, atemp_params)
+        return get_mapping_shape(initial_state), get_mapping_shape(atemp_params)
+
     # TODO g179du91 move to parent class as other solvers might also need to lazily compile?
     def _pyro__lazily_compile_problem(self, msg) -> None:
 
-        (dynamics, initial_state, start_time, end_time), atemp_params, kwargs = self._process_simulate_args_kwargs(msg)
+        (dynamics, initial_state, start_time, end_time), atemp_params, _ = self._process_simulate_args_kwargs(msg)
 
-        # Primarily due to interventions, but also different platings on the parameters, we may have a number of
-        #  different shape requirements. We need to track separate problems that are compiled for each.
-        initial_state = pre_broadcast(dynamics, initial_state, atemp_params)
+        initial_state = pre_broadcast_initial_state(dynamics, initial_state, atemp_params)
         initial_state_shape = get_mapping_shape(initial_state)
         atemp_params_shape = get_mapping_shape(atemp_params)
-        problem_shape = (initial_state_shape, atemp_params_shape)
+        problem_shape: MappingShapePair = (initial_state_shape, atemp_params_shape)
 
         # TODO this also should check to make sure that compilation kwargs are the same as the ones that were used
         #  to compile the solver? Or put those kwargs in the compilation mapping somewhere.
+        # TODO eh we aren't really using compilation kwargs. They all go to solve.
 
         lazily_compiled_solver_by_shape = self._get_or_create_compilations_for_dynamics(dynamics)
 
@@ -128,8 +152,34 @@ class DiffEqPy(Solver[Tnsr]):
             from chirho_diffeqpy.internals import diffeqdotjl_compile_problem
 
             lazily_compiled_solver_by_shape[problem_shape] = diffeqdotjl_compile_problem(
-                dynamics, initial_state, start_time, end_time, atemp_params=atemp_params, **kwargs
+                dynamics, initial_state, start_time, end_time, atemp_params=atemp_params
             )
 
         msg["value"] = lazily_compiled_solver_by_shape[problem_shape]
+        msg["done"] = True
+
+    # TODO g179du91
+    def _pyro__lazily_compile_event_fn_callback(self, msg) -> None:
+        interruption, initial_state, atemp_params = msg["args"]  # type: Interruption, State[Tnsr], ATempParams[Tnsr]
+        # TODO what if atemp_params passed as kwargs? Maybe fine b/c this is only used internally.
+
+        # Not prebroadcasting here, as the event function will be called during the solve, which will be operating
+        #  on the expanded state shape already.
+        initial_state_shape = get_mapping_shape(initial_state)
+        atemp_params_shape = get_mapping_shape(atemp_params)
+        problem_shape: MappingShapePair = (initial_state_shape, atemp_params_shape)
+
+        # TODO raise an error if any interruption.predicate are not ZeroEvent (which have an event_fn defined).
+        lazily_compiled_event_fns_by_shape = self._get_or_create_compilations_for_event_fns(interruption.predicate.event_fn)
+
+        if problem_shape not in lazily_compiled_event_fns_by_shape:
+            from chirho_diffeqpy.internals import (
+                diffeqdotjl_compile_event_fn_callback,
+            )
+
+            lazily_compiled_event_fns_by_shape[problem_shape] = diffeqdotjl_compile_event_fn_callback(
+                interruption, initial_state, atemp_params=atemp_params
+            )
+
+        msg["value"] = lazily_compiled_event_fns_by_shape[problem_shape]
         msg["done"] = True
