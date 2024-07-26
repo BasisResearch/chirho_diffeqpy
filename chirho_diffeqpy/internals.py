@@ -548,7 +548,7 @@ def diffeqdotjl_compile_event_fn_callback(
         interruption: Interruption,
         initial_state: State[Tnsr],
         atemp_params: ATempParams[Tnsr]
-) -> Tuple[de.VectorContinuousCallback, Callable]:
+) -> de.VectorContinuousCallback:
 
     if not isinstance(interruption.predicate, ZeroEvent):
         raise ValueError("event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
@@ -641,7 +641,7 @@ def diffeqdotjl_compile_event_fn_callback(
         getattr(jl, f"condition_{affect_uuid}"),
         affect_b,
         numel_out
-    ), getattr(jl, f"condition_{affect_uuid}")
+    )
 
 
 # TODO HACK maybe 18wfghjfs541
