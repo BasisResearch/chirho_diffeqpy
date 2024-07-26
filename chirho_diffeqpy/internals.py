@@ -609,8 +609,10 @@ def diffeqdotjl_compile_event_fn_callback(
     # Build the inner_condition_ function.
     built_expr = jl.seval("build_function(out, u, t, p)")
 
-    import uuid  # DEBUG
-    affect_uuid = uuid.uuid4().hex  # DEBUG
+    # TODO HACK figure out a less janky namespace solution. maybe just write this compilation in julia and call
+    #  it here.
+    import uuid
+    affect_uuid = uuid.uuid4().hex
 
     # Evaluate it to turn it into a julia function.
     # This builds both an in place and regular function, but we only need the in place one.
@@ -629,7 +631,7 @@ def diffeqdotjl_compile_event_fn_callback(
     # The "affect" function is only called a single time, so we can just use python. This
     #  function also tracks which interruption triggered the termination.
     def affect_b(integrator, *_):
-        # TODO HACK maybe 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
+        # TODO HACK 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
         #  to directly track which interruption was responsible for termination is a lot cleaner than running
         #  the event_fns after the fact to figure out which one was responsible.
         _last_triggered_interruption_ptr[0] = interruption
@@ -644,7 +646,7 @@ def diffeqdotjl_compile_event_fn_callback(
     )
 
 
-# TODO HACK maybe 18wfghjfs541
+# TODO HACK 18wfghjfs541
 # Can this go in the solver somehow so we don't have a global?
 _last_triggered_interruption_ptr = [None]  # type: List[Optional[Interruption]]
 
