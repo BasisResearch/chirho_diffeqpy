@@ -166,7 +166,10 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
 
     @staticmethod
     def wrap_array(arr: np.ndarray):
-        regular_array = np.vectorize(JuliaThingWrapper)(arr)
+        if arr.size > 0:
+            regular_array = np.vectorize(JuliaThingWrapper)(arr)
+        else:  # edge case for empty arrays, we can just wrap in a view in this case.
+            regular_array = arr
         # Because we need to forward numpy ufuncs to julia,
         return regular_array.view(_JuliaThingWrapperArray)
 

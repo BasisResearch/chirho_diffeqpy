@@ -176,13 +176,14 @@ retcode = pytest.main(
         f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
         f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
         f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
-        # f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
+        f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
         #  the early julicall import causes some kind of permission error in the fault handler.
         # Solution: disable it.
-        "-p", "no:faulthandler"
+        "-p", "no:faulthandler",
+        # "-s"  # uncomment to print stuff during tests.
     ],
     plugins=[ReparametrizeWithDiffEqPySolver()]
 )

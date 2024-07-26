@@ -181,5 +181,5 @@ class DiffEqPy(Solver[Tnsr]):
                 interruption, initial_state, atemp_params=atemp_params
             )
 
-        msg["value"] = lazily_compiled_event_fns_by_shape[problem_shape]
+        msg["value"] = lazily_compiled_event_fns_by_shape[problem_shape][0]
         msg["done"] = True

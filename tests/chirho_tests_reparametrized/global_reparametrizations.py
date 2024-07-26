@@ -72,8 +72,18 @@ def _(dispatch_arg, *args, **kwargs):
 
 @reparametrize_argument_by_value.register(model_with_param_in_state)
 def _(*args, **kwargs):
+
+    # The same as the original chirho fixture but with scalars (not torch tensors) as constants.
+    def model_with_param_in_state_np(X):
+        dX = dict()
+        dX["x"] = np.array(1.0)
+        dX["z"] = X["dz"]
+        dX["dz"] = np.array(0.0)  # also a constant, this gets set by interventions.
+        dX["param"] = np.array(0.0)  # this is a constant event function parameter, so no change.
+        return dX
+
     return MockClosureDynamicsDirectPass(
-        dynamics=lambda state, atemp_params: model_with_param_in_state(state),
+        dynamics=lambda state, atemp_params: model_with_param_in_state_np(state),
         atemp_params=dict()
     )
 # </Dynamics>

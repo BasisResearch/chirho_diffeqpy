@@ -63,6 +63,11 @@ def _(v: tuple):
     return tuple(to_numpy(v) for v in v)
 
 
+@to_numpy.register
+def _(v: np.ndarray):
+    return v
+
+
 def pre_broadcast_initial_state(
         f: Callable,
         initial_state: Mapping[str, T],
@@ -70,18 +75,24 @@ def pre_broadcast_initial_state(
         **kwargs
 ) -> Mapping[str, T]:
 
+    assert len(initial_state.keys()), "Initial state must have at least one key."
+
     # Convert to numpy arrays.
-    initial_state_np = to_numpy(initial_state)
     args_np = to_numpy(args)
     kwargs_np = to_numpy(kwargs)
 
-    if "t" not in initial_state_np:
-        initial_state_np["t"] = 1.0
-
-    output = f(initial_state_np, *args_np, **kwargs_np)
-
-    broadcasted_initial_state = {k: initial_state[k] + torch.zeros(output[k].shape)
-                                 for k, v in initial_state.items()}
+    # Tiled elements of the state might not actually fully prebroadcast in one execution of the dynamics function.
+    # E.g. if S affects I affects R, and S is tiled, then R won't be fully pre broadcasted after the first run.
+    broadcasted_initial_state = initial_state
+    outputs = []  # for check below
+    for _ in initial_state.keys():
+        broadcasted_initial_state_np = to_numpy(broadcasted_initial_state)
+        if "t" not in broadcasted_initial_state_np:
+            broadcasted_initial_state_np["t"] = 1.0
+        output = f(broadcasted_initial_state_np, *args_np, **kwargs_np)
+        outputs.append(output)  # for check below
+        broadcasted_initial_state = {k: initial_state[k] + torch.zeros(output[k].shape)
+                                     for k, v in initial_state.items()}
 
     # TODO only run this in check_dynamics?
     # <Check Pre-Broadcast>
@@ -93,8 +104,18 @@ def pre_broadcast_initial_state(
         *args_np,
         **kwargs_np
     )
-    for k, v in output.items():
-        assert np.allclose(v, output_w_prebroadcast[k])
+    # Require that the pre-broadcasted output is identical to all iterations of outputs, e.g. with the original
+    #  initial state.
+    for output in outputs:
+        for k, v in output.items():
+            assert np.allclose(v, output_w_prebroadcast[k]), \
+                "pre_broadcast of initial_state resulted in different output!"
+    # Also require that the output_w_prebroadcast has the same shape as the broadcasted_initial_state. This tells us
+    #  that we have fully pre-broadcasted the initial state (and didn't need any extra iterations, i.e. we converged).
+    check_broadcasted_initial_state = {k: initial_state[k] + torch.zeros(output_w_prebroadcast[k].shape)
+                                       for k, v in initial_state.items()}
+    for (_, v1), (_, v2) in zip(broadcasted_initial_state.items(), check_broadcasted_initial_state.items()):
+        assert v1.shape == v2.shape, "pre_broadcast of initial_state failed to converge!"
     # </Check Pre-Broadcast>
 
     return broadcasted_initial_state
@@ -112,6 +133,7 @@ def diffeqdotjl_compile_problem(
 
     require_float64(initial_state)
     require_float64(atemp_params)
+    require_float64(dict(start_time=start_time, end_time=end_time))
 
     # See the note below for why this must be a pure function and cannot use the values in initial_atemp_params directly.
     # callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the preallocated
@@ -136,7 +158,7 @@ def diffeqdotjl_compile_problem(
             raise ValueError("Cannot have a state variable named 't' as it is reserved for the time variable.")
         state = dict(**state, t=t)
 
-        dstate = dynamics(state, inner_atemp_params)
+        dstate: State = dynamics(state, inner_atemp_params)
 
         flat_dstate = _flatten_mapping(dstate)
 
@@ -156,7 +178,7 @@ def diffeqdotjl_compile_problem(
         # Note that we are only interested in compilation here, not differentiation! These values will strictly be
         #  used for their types and shapes so that the ODEProblem knows what to compile for.
         flat_initial_state.detach().numpy(),
-        np.array([start_time, end_time], dtype=np.float64),
+        torch.cat((start_time[None], end_time[None])).detach().numpy(),
         # HACK sgfeh2 stuff breaks with a len zero array, and passing nothing or None incurs the same problem.
         flat_atemp_params.detach().numpy() if len(flat_atemp_params) else np.ones((1,), dtype=np.float64),
     )
@@ -276,6 +298,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
     require_float64(initial_state)
     require_float64(atemp_params)
+    require_float64(dict(timespan=timespan))
 
     compiled_prob = _lazily_compile_problem(
         dynamics,
@@ -348,6 +371,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
     # Finally, execute the juliacall function
     solve_result = JuliaFunction.apply(inner_solve, outer_u0_t_p)
+    # Extract out the concatenated return values.
     flat_traj = solve_result[..., :-1]
     end_t = solve_result[-1]
 
@@ -371,12 +395,8 @@ def _diffeqdotjl_ode_simulate_inner(
     # for those times, so we need to
     #  1) find the timespan elements that are less than or equal to the interruption time (end_t)
     #  2) return the requested_traj after masking out those states logged after end_t.
-    # print("timespan", timespan)
-    # print("end_t", end_t)
     pre_event_mask = timespan < end_t
-    # print("pre_event_mask", pre_event_mask)
     pre_event_requested_traj = {k: v[..., pre_event_mask] for k, v in requested_traj.items()}
-    # print("pre_event_requested_traj", pre_event_requested_traj)
 
     return pre_event_requested_traj, final_state, end_t
 
@@ -427,6 +447,7 @@ def diffeqdotjl_simulate_to_interruption(
         )
         return final_state, static_end_time, static_end_interruption
 
+    initial_state = pre_broadcast_initial_state(dynamics, initial_state, atemp_params)
     cb = _diffeqdotjl_build_combined_event_f_callback(
         dynamic_interruptions,
         initial_state=initial_state,
@@ -527,7 +548,7 @@ def diffeqdotjl_compile_event_fn_callback(
         interruption: Interruption,
         initial_state: State[Tnsr],
         atemp_params: ATempParams[Tnsr]
-) -> de.VectorContinuousCallback:
+) -> Tuple[de.VectorContinuousCallback, Callable]:
 
     if not isinstance(interruption.predicate, ZeroEvent):
         raise ValueError("event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
@@ -588,16 +609,20 @@ def diffeqdotjl_compile_event_fn_callback(
     # Build the inner_condition_ function.
     built_expr = jl.seval("build_function(out, u, t, p)")
 
+    import uuid  # DEBUG
+    affect_uuid = uuid.uuid4().hex  # DEBUG
+
     # Evaluate it to turn it into a julia function.
     # This builds both an in place and regular function, but we only need the in place one.
     assert len(built_expr) == 2
-    jl.inner_condition_ = jl.eval(built_expr[-1])
+    # jl.inner_condition_ = jl.eval(built_expr[-1])
+    setattr(jl, f"inner_condition_{affect_uuid}", jl.eval(built_expr[-1]))
 
     # inner_condition can now be called from a condition function with signature
     #  expected by the callbacks.
-    jl.seval("""
-    function condition_(out, u, t, integrator)
-        inner_condition_(out, u, t, integrator.p)
+    jl.seval(f"""
+    function condition_{affect_uuid}(out, u, t, integrator)
+        inner_condition_{affect_uuid}(out, u, t, integrator.p)
     end
     """)
 
@@ -611,7 +636,12 @@ def diffeqdotjl_compile_event_fn_callback(
         de.terminate_b(integrator)
 
     # Return the callback involving only juila functions.
-    return de.VectorContinuousCallback(jl.condition_, affect_b, numel_out)
+    return de.VectorContinuousCallback(
+        # jl.condition_,
+        getattr(jl, f"condition_{affect_uuid}"),
+        affect_b,
+        numel_out
+    ), getattr(jl, f"condition_{affect_uuid}")
 
 
 # TODO HACK maybe 18wfghjfs541
