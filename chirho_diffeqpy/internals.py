@@ -417,8 +417,6 @@ def diffeqdotjl_simulate_to_interruption(
     static_end_interruption = interruptions[static_time_min_idx]
 
     if len(dynamic_interruptions) == 0:
-        # TODO this HAS to be simulate_point in order for trajectory to be logged. This won't work to achieve
-        #  the goal of not having to simulate twice (once to find interruption, and a second time to get trajectory).
         final_state = simulate_point(
             dynamics,
             initial_state,
@@ -435,17 +433,25 @@ def diffeqdotjl_simulate_to_interruption(
         atemp_params=atemp_params
     )
 
-    # TODO HACK maybe 18wfghjfs541
+    # FIXME iwgar0kgs72 So the original backend implementation for TorchDiffEq assumes that neither simulate_point
+    #  nor (implicitly b/c of how it's used in LogTrajectory) simulate_trajectory are interruptible. The has the
+    #  unfortunate side effect of requiring that dynamic intervention times be found before the trajectory is logged.
+    #  This design was landed on b/c torchdiffeq cannot solve for intermediate time points while also searching for
+    #  an interruption. diffeqpy, however, can. We should refactor "upstream" abstractions in favor of this latter
+    #  functioning, rather than the former induced by weird torchdiffeq limitations.
+    #  For now though, we'll proceed as we do with torchdiffeq and find the interruption time first, and then resolve
+    #  with simulate_point in order to log the trajectory.
+
+    # TODO HACK 18wfghjfs541 Set global interruption callback pointer to None.
+    #  This will be set to the triggering interruption if one is found.
+    #  Maybe make this local in _diffeqdotjl_ode_simulate_inner somehow? This is hard because the event_fns
+    #  themselves get lazily compiled wrt this pointer.
     _last_triggered_interruption_ptr[0] = None
 
-    # FIXME HACK because trajectory overrides simulate point, we have to call it here,
-    #  which will solve the same ODE a second time. Need to refactor higher up to avoid?
-    # As of 07-2024 I'm unclear on the nuances here. This, as opposed to just calling the inner simulate?
-    final_state = simulate_point(
+    requested_trajectory, final_state, interruption_time = _diffeqdotjl_ode_simulate_inner(
         dynamics,
         initial_state,
-        start_time,
-        static_end_time,
+        torch.stack((start_time, static_end_time)),
         atemp_params=atemp_params,
         _diffeqdotjl_callback=cb,
         **kwargs
@@ -453,15 +459,26 @@ def diffeqdotjl_simulate_to_interruption(
 
     # If no dynamic intervention's affect! function fired, then the static interruption is responsible for
     #  termination.
-    if _last_triggered_interruption_ptr[0] is None:  # TODO HACK maybe 18wfghjfs541
+    # TODO HACK 18wfghjfs541
+    if _last_triggered_interruption_ptr[0] is None:
         triggering_interruption = static_end_interruption
-        end_t = static_end_time
+        interruption_time = static_end_time
     else:
-        triggering_interruption, end_t = _last_triggered_interruption_ptr[0]
-        # FIXME fl0819ohdh wont be differentiable wrt end time. Need to do something with JuliaFunction.apply?
-        end_t = torch.tensor(end_t)
+        triggering_interruption = _last_triggered_interruption_ptr[0]
 
-    return final_state, end_t, triggering_interruption
+    # FIXME iwgar0kgs72 simulate a second time with the effectful op to log the trajectory.
+    #  See above for why this is silly. Note that we aren't using anything returned here...
+    simulate_point(
+        dynamics,
+        initial_state,
+        start_time,
+        interruption_time,
+        atemp_params=atemp_params,
+        # _diffeqdotjl_callback=cb,  # FIXME iwgar0kgs72 ignoring dynamic interruption callbacks here.
+        **kwargs
+    )
+
+    return final_state, interruption_time, triggering_interruption
 
 
 def diffeqdotjl_simulate_point(
@@ -498,9 +515,6 @@ def _(x: Tnsr):
 
 @numel.register
 def _(x: juliacall.ArrayValue):
-    # print("STUFFUFUFUFUF---")
-    # print(x.shape)
-    # print(prod(x.shape))
     return prod(x.shape)
 
 
@@ -589,13 +603,11 @@ def diffeqdotjl_compile_event_fn_callback(
 
     # The "affect" function is only called a single time, so we can just use python. This
     #  function also tracks which interruption triggered the termination.
-    # TODO HACK maybe 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
-    #  to directly track which interruption was responsible for termination is a lot cleaner than running
-    #  the event_fns after the fact to figure out which one was responsible.
     def affect_b(integrator, *_):
-        # FIXME WIP nmiy28fha0h so the integrator times isn't the precise time of the event?
-        #  Maybe there's a tolerance thing.
-        _last_triggered_interruption_ptr[0] = (interruption, integrator.t)
+        # TODO HACK maybe 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
+        #  to directly track which interruption was responsible for termination is a lot cleaner than running
+        #  the event_fns after the fact to figure out which one was responsible.
+        _last_triggered_interruption_ptr[0] = interruption
         de.terminate_b(integrator)
 
     # Return the callback involving only juila functions.
@@ -603,14 +615,8 @@ def diffeqdotjl_compile_event_fn_callback(
 
 
 # TODO HACK maybe 18wfghjfs541
-# FIXME fl0819ohdh the second bit of the tuple, the interruption time, isn't differentiable.
 # Can this go in the solver somehow so we don't have a global?
-_last_triggered_interruption_ptr = [None]  # type: List[Optional[Tuple[Interruption, float]]]
-# TODO fl0819ohdh looking again at:
-#   https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/#Example-2:-Terminating-an-Integration
-#  They use sol.t[end] to get the end time, but we're using interpolation of sol to get requested timespans
-#  in the inner solve. Maybe sol.t[end] still has what we need, and we can then return it from inner_solve and
-#  we should get differentiation working for it, as JuliaFunction.apply wraps that whole thing.
+_last_triggered_interruption_ptr = [None]  # type: List[Optional[Interruption]]
 
 
 def _diffeqdotjl_build_combined_event_f_callback(
