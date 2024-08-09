@@ -177,6 +177,7 @@ retcode = pytest.main(
         f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
         f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
         f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
+        f"{chirho_root_path}/tests/dynamical/test_handler_composition.py",
 
         # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
         # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding

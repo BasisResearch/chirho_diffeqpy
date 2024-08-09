@@ -2,7 +2,8 @@ from functools import singledispatch
 from .fixtures import (
     MockClosureUnifiedFixtureDynamics,
     build_state_reached_pure_event_fn,
-    MockClosureDynamicsDirectPass
+    MockClosureDynamicsDirectPass,
+    MockClosureUnifiedFixtureDynamicsReparam,
 )
 from .fixtures_imported_from_chirho import (
     SIRObservationMixin,
@@ -14,7 +15,7 @@ from .fixtures_imported_from_chirho import (
     RandBetaUnifiedFixtureDynamics,
     build_event_fn_zero_after_tt,
     get_state_reached_event_f,
-    model_with_param_in_state
+    model_with_param_in_state,
 )
 from chirho.dynamical.handlers.solver import Solver
 from .reparametrization import reparametrize_argument_by_value, reparametrize_argument_by_type
@@ -85,6 +86,15 @@ def _(*args, **kwargs):
     return MockClosureDynamicsDirectPass(
         dynamics=lambda state, atemp_params: model_with_param_in_state_np(state),
         atemp_params=dict()
+    )
+
+
+# Given any instance of UnifiedFixtureDynamicsReparam
+@reparametrize_argument_by_type.register(UnifiedFixtureDynamicsReparam)
+def _(dispatch_arg, *args, **kwargs):
+    return MockClosureUnifiedFixtureDynamicsReparam(
+        beta=dispatch_arg.beta,
+        gamma=dispatch_arg.gamma
     )
 # </Dynamics>
 
