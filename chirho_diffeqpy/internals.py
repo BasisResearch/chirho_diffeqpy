@@ -69,11 +69,10 @@ def _(v: np.ndarray):
 
 def pre_broadcast_initial_state(
         f: Callable,
-        initial_state: Mapping[str, T],
+        initial_state: State[torch.Tensor],
         *args,
         **kwargs
-) -> Mapping[str, T]:
-
+) -> State[torch.Tensor]:
     assert len(initial_state.keys()), "Initial state must have at least one key."
 
     # Convert to numpy arrays.
@@ -121,13 +120,12 @@ def pre_broadcast_initial_state(
 
 
 def diffeqdotjl_compile_problem(
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[Tnsr],
-    start_time: Tnsr,
-    end_time: Tnsr,
-    atemp_params: ATempParams[Tnsr],
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[Tnsr],
+        start_time: Tnsr,
+        end_time: Tnsr,
+        atemp_params: ATempParams[Tnsr],
 ) -> de.ODEProblem:
-
     # TODO take general compilation kwargs here too.
 
     require_float64(initial_state)
@@ -191,11 +189,11 @@ def diffeqdotjl_compile_problem(
 # See use in handlers/solver.DiffEqDotJL._pyro__lazily_compile_problem
 @pyro.poutine.runtime.effectful(type="_lazily_compile_problem")
 def _lazily_compile_problem(
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[Tnsr],
-    start_time,
-    end_time,
-    atemp_params,
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[Tnsr],
+        start_time,
+        end_time,
+        atemp_params,
 ) -> de.ODEProblem:
     raise NotImplementedError()
 
@@ -250,7 +248,6 @@ def _unflatten_mapping(
         shaped_mapping_for_reference: Mapping[str, Union[Tnsr, juliacall.VectorValue]],
         traj_length: Optional[int] = None
 ) -> Mapping[str, Union[Tnsr, np.ndarray]]:
-
     var_order = get_var_order(shaped_mapping_for_reference)
     mapping_to_return = dict()
     for v in var_order:
@@ -280,14 +277,13 @@ def require_float64(mapping: Mapping[str, Tnsr]):
 
 
 def _diffeqdotjl_ode_simulate_inner(
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[Tnsr],
-    timespan: Tnsr,
-    atemp_params: ATempParams[Tnsr],
-    _diffeqdotjl_callback: Optional[de.CallbackSet] = None,
-    **kwargs
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[Tnsr],
+        timespan: Tnsr,
+        atemp_params: ATempParams[Tnsr],
+        _diffeqdotjl_callback: Optional[de.CallbackSet] = None,
+        **kwargs
 ) -> Tuple[State[torch.Tensor], State[torch.Tensor], torch.Tensor]:
-
     # if not torch.all(timespan[:-1] < timespan[1:]):
     #     raise ValueError("The requested times must be sorted and strictly increasing.")
 
@@ -401,25 +397,24 @@ def _diffeqdotjl_ode_simulate_inner(
 
 
 def diffeqdotjl_simulate_trajectory(
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[Tnsr],
-    timespan: Tnsr,
-    **kwargs,
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[Tnsr],
+        timespan: Tnsr,
+        **kwargs,
 ) -> State[Tnsr]:
     requested_traj, final_State, end_t = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
     return requested_traj
 
 
 def diffeqdotjl_simulate_to_interruption(
-    interruptions: List[Interruption],
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[Tnsr],
-    start_time: Tnsr,
-    end_time: Tnsr,
-    atemp_params: ATempParams[Tnsr],
-    **kwargs,
+        interruptions: List[Interruption],
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[Tnsr],
+        start_time: Tnsr,
+        end_time: Tnsr,
+        atemp_params: ATempParams[Tnsr],
+        **kwargs,
 ) -> Tuple[State[Tnsr], Tnsr, Optional[Interruption]]:
-
     # Static interruptions can be handled statically, so sort out dynamics from statics.
     dynamic_interruptions = [
         interruption for interruption in interruptions
@@ -502,14 +497,13 @@ def diffeqdotjl_simulate_to_interruption(
 
 
 def diffeqdotjl_simulate_point(
-    dynamics: PureDynamics[np.ndarray],
-    initial_state: State[torch.Tensor],
-    start_time: torch.Tensor,
-    end_time: torch.Tensor,
-    atemp_params: ATempParams[T],
-    **kwargs,
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[torch.Tensor],
+        start_time: torch.Tensor,
+        end_time: torch.Tensor,
+        atemp_params: ATempParams[T],
+        **kwargs,
 ) -> State[torch.Tensor]:
-
     timespan = torch.stack((start_time, end_time))
     requested_trajectory, final_state, end_t = _diffeqdotjl_ode_simulate_inner(
         dynamics, initial_state, timespan, atemp_params=atemp_params, **kwargs
@@ -548,7 +542,6 @@ def diffeqdotjl_compile_event_fn_callback(
         initial_state: State[Tnsr],
         atemp_params: ATempParams[Tnsr]
 ) -> de.VectorContinuousCallback:
-
     if not isinstance(interruption.predicate, ZeroEvent):
         raise ValueError("event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
                          " Only ZeroEvents can currently be compiled.")
@@ -655,7 +648,6 @@ def _diffeqdotjl_build_combined_event_f_callback(
         initial_state: State[Tnsr],
         atemp_params: ATempParams[Tnsr],
 ) -> de.CallbackSet:
-
     cbs = []
 
     for i, interruption in enumerate(interruptions):
@@ -683,12 +675,12 @@ def _index_select_from_ndarray(arr: np.ndarray, dim: int, indices: List[int]) ->
 #  _index_select_from_ndarray above.
 @gather.register
 def _gather_ndarray(
-    value: np.ndarray,
-    indexset: IndexSet,
-    *,
-    event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
-    **kwargs,
+        value: np.ndarray,
+        indexset: IndexSet,
+        *,
+        event_dim: Optional[int] = None,
+        name_to_dim: Optional[Dict[Hashable, int]] = None,
+        **kwargs,
 ) -> np.ndarray:
     if event_dim is None:
         event_dim = 0
@@ -710,3 +702,45 @@ def _gather_ndarray(
         #     torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
         # )
     return result
+
+
+class DiffEqPyRuntimeCheck(pyro.poutine.messenger.Messenger):
+    def _pyro_sample(self, msg):
+        raise ValueError(
+            "The chirho DiffEqPy backend currently only supports ODE models and not SDE models,"
+            " and thus does not allow `pyro.sample` calls within the dynamics."
+        )
+
+
+def diffeqpy_check_dynamics(
+        dynamics: PureDynamics[np.ndarray],
+        initial_state: State[torch.Tensor],
+        start_time: torch.Tensor,
+        end_time: torch.Tensor,
+        atemp_params: ATempParams[torch.Tensor],
+) -> None:
+    # Pre-broadcast (this also checks that the prebroadcast reaches a shape fixed point).
+    expanded_initial_state = pre_broadcast_initial_state(dynamics, initial_state, atemp_params)
+
+    expanded_initial_state_np = to_numpy(expanded_initial_state)
+    atemp_params_np = to_numpy(atemp_params)
+
+    with DiffEqPyRuntimeCheck():
+        dt_np = dynamics(expanded_initial_state_np, atemp_params_np)
+
+    if not isinstance(dt_np, dict):
+        raise ValueError("Dynamics function must return a dictionary of dstates.")
+
+    if dt_np.keys() != expanded_initial_state_np.keys():
+        raise ValueError(f"Time derivative for state variables {dt_np.keys()} does not match the state variables "
+                         f"{expanded_initial_state_np.keys()}.")
+
+    for k, v in dt_np.items():
+        if v.shape != expanded_initial_state_np[k].shape:
+            raise ValueError(f"Time derivative for state variable {k} has shape {v.shape}, but expected it be the same "
+                             f" shape as the state {expanded_initial_state_np[k].shape}.")
+
+        if isinstance(v, torch.Tensor):
+            raise NotImplementedError(
+                f"Time derivative for state variable {k} is a torch tensor, but currently dynamics"
+                " must be defined to operate on and return numpy arrays.")

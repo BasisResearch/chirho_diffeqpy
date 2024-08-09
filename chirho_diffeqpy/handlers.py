@@ -118,9 +118,6 @@ class DiffEqPy(Solver[Tnsr]):
         )
         msg["done"] = True
 
-    def _pyro_check_dynamics(self, msg) -> None:
-        raise NotImplementedError
-
     @staticmethod
     def _get_problem_shape(
             dynamics: PureDynamics[np.ndarray],
@@ -182,4 +179,16 @@ class DiffEqPy(Solver[Tnsr]):
             )
 
         msg["value"] = lazily_compiled_event_fns_by_shape[problem_shape]
+        msg["done"] = True
+
+    def _pyro_check_dynamics(self, msg) -> None:
+        from chirho_diffeqpy.internals import (
+            diffeqpy_check_dynamics,
+        )
+
+        (dynamics, initial_state, start_time, end_time), atemp_params, _ = self._process_simulate_args_kwargs(msg)
+
+        diffeqpy_check_dynamics(
+            dynamics, initial_state, start_time, end_time, atemp_params=atemp_params
+        )
         msg["done"] = True
