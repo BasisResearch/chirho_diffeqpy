@@ -14,14 +14,13 @@ from torch import Tensor as Tnsr
 from juliatorch import JuliaFunction
 import juliacall
 import numpy as np
-from typing import Union
+from typing import Union, Dict, Hashable
 from functools import singledispatch
 from chirho_diffeqpy.lang_interop import callable_from_julia
 from juliacall import Main as jl
 import numbers
 from copy import copy
 from chirho.indexed.ops import indices_of, gather
-from chirho.indexed.internals import index_select_from_array_like, _gather_tensor
 from chirho_diffeqpy.lang_interop.ops import convert_julia_to_python, convert_python_to_julia
 from math import prod
 
@@ -672,21 +671,42 @@ def _diffeqdotjl_build_combined_event_f_callback(
 
 
 @indices_of.register
-def _indices_of_tensor(value: np.ndarray, **kwargs) -> IndexSet:
+def _indices_of_ndarray(value: np.ndarray, **kwargs) -> IndexSet:
     return indices_of(value.shape, **kwargs)
 
 
-@index_select_from_array_like.register
-def _index_select_from_array_like_npndarray(arr: np.ndarray, dim: int, indices: List[int]) -> np.ndarray:
+def _index_select_from_ndarray(arr: np.ndarray, dim: int, indices: List[int]) -> np.ndarray:
     return np.take(arr, indices=np.array(indices), axis=dim)
 
 
+# Note dg1ofo9: This implementation is identical to the torch tensor implementation, except that it uses
+#  _index_select_from_ndarray above.
 @gather.register
-def _gather_npndarray(
+def _gather_ndarray(
     value: np.ndarray,
-    *args,
+    indexset: IndexSet,
+    *,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
     **kwargs,
 ) -> np.ndarray:
-    # Can use the same implementation actually, as _gather_tensor works for any array likes that have an
-    #  index_select_from_array_like implementation (see above).
-    return _gather_tensor(value, *args, **kwargs)
+    if event_dim is None:
+        event_dim = 0
+    if name_to_dim is None:
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+    result = value
+    for name, indices in indexset.items():
+        if name not in name_to_dim:
+            continue
+        dim = name_to_dim[name] - event_dim
+        if len(result.shape) < -dim or result.shape[dim] == 1:
+            continue
+        result = _index_select_from_ndarray(
+            result, name_to_dim[name] - event_dim, list(sorted(indices))
+        )
+        # See above for note dg1ofo9
+        # result = result.index_select(
+        #     name_to_dim[name] - event_dim,
+        #     torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
+        # )
+    return result
