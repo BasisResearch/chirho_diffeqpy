@@ -74,13 +74,14 @@ def _(dispatch_arg, *args, **kwargs):
 @reparametrize_argument_by_value.register(model_with_param_in_state)
 def _(*args, **kwargs):
 
-    # The same as the original chirho fixture but with scalars (not torch tensors) as constants.
+    # Annoyingly, dX has to be a symbolic function of state, so for constants we have to do hacky stuff.
+    # Multiplying or dividing by the state itself preserves shape information.
     def model_with_param_in_state_np(X):
         dX = dict()
-        dX["x"] = np.array(1.0)
+        dX["x"] = (X["x"] + 1.) / (X["x"] + 1.)  # a constant, 1.
         dX["z"] = X["dz"]
-        dX["dz"] = np.array(0.0)  # also a constant, this gets set by interventions.
-        dX["param"] = np.array(0.0)  # this is a constant event function parameter, so no change.
+        dX["dz"] = X["dz"] * 0.0  # also a constant, this gets set by interventions.
+        dX["param"] = X["param"] * 0.0  # this is a constant event function parameter, so no change.
         return dX
 
     return MockClosureDynamicsDirectPass(
