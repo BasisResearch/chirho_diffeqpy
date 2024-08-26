@@ -59,7 +59,7 @@ class DiffEqPyMockClosureCapable(DiffEqPy):
                 raise ValueError("DiffEqPyMockClosureCapable should be called with a callable, "
                                  " or with no arguments at all.")
 
-        kwarg_diff = DeepDiff(self.solve_kwargs, kwargs)
+        kwarg_diff = DeepDiff(self.solve_kwargs, {**self.DEFAULT_KWARGS, **kwargs})
         if len(kwarg_diff):
             raise ValueError("An instance of DiffEqPyMockClosureCapable was called with different kwargs than it was "
                              f"initialized with. The diff was: {kwarg_diff}")

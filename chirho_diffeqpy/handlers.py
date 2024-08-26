@@ -29,11 +29,18 @@ MappingShapePair = Tuple[MappingShape, MappingShape]
 
 class DiffEqPy(Solver[Tnsr]):
 
+    # These match the torchdiffeq defaults in chirho 2.0
+    DEFAULT_KWARGS = dict(
+        reltol=1e-7,
+        abstol=1e-9,
+    )
+
     def __init__(self, **kwargs):
         super().__init__()
 
         # Add solver arguments to init sig and put them here as needed. They will be passed along below.
-        self.solve_kwargs = kwargs
+        # Note that the passed kwargs will take preference under this ordering.
+        self.solve_kwargs = {**self.DEFAULT_KWARGS, **kwargs}
 
         # Lazily compile solvers used in this context. Compilations are organized first by the dynamics function
         #  object itself, and then by the shapes of the (prebroadcasted) state and atemp_params that have been
