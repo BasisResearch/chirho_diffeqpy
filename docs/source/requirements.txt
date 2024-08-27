@@ -1,4 +1,4 @@
-chirho[dynamical]==0.2.0
+chirho[dynamical] @ git+https://github.com/BasisResearch/chirho.git@cda2f56
 diffeqpy==2.4.1
 juliatorch @ git+https://github.com/SciML/juliatorch.git@5f79d3b
 deepdiff==7.0.1
