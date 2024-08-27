@@ -5,6 +5,8 @@ from os.path import (
 import juliacall
 import numpy as np
 from itertools import product
+# Noop import to force package loading and diffeqpy julia environment activation.
+from diffeqpy.de import de
 
 jl = juliacall.Main.seval
 
