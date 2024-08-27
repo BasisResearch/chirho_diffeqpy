@@ -132,20 +132,20 @@ class ReparametrizeWithDiffEqPySolver:
 
         # TODO Otherwise, skip this test.
 
-        # Doesn't work, skips whole module.
+        # # Doesn't work, skips whole module.
         # pytest.skip("No solver parametrization marker found to reparametrize. This test would not exercise the"
         #             " DiffEqPy solver backend.")
 
-        # Doesn't work, doesn't change anything.
+        # # Doesn't work, doesn't change anything.
         # metafunc.definition.add_marker(pytest.mark.skip(
         #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
         #            " DiffEqPy solver backend."
         # ))
 
-        # Doesn't work, doesn't change anything and skip never gets called.
+        # # Doesn't work, doesn't change anything and skip never gets called.
         # metafunc.function = _skip_wrapper
 
-        # Also doesn't work. Also tries to use an internal pytest
+        # # Also doesn't work. Also tries to use an internal pytest
         # metafunc.definition.own_markers.clear()
         # skip_mark = pytest.Mark(name="skip", args=tuple(), kwargs=dict(
         #     reason="No solver parametrization marker found to reparametrize. This test would not exercise the"
@@ -157,38 +157,44 @@ class ReparametrizeWithDiffEqPySolver:
         print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
               f"solver, but not yet figured out how to dynamically skip individual tests.")
 
-# TODO what about generating separate solver instance parametrizations for every lang_interop backend?
-# See also, in test_solver: FIXME hk0jd16g.
-# Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
-from chirho_diffeqpy.lang_interop import julianumpy
 
-# Also, import the global and per_test to register those dispatched reparametrizations.
-import chirho_tests_reparametrized.global_reparametrizations
-import chirho_tests_reparametrized.per_test_reparametrizations
+def main():
+    # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
+    # See also, in test_solver: FIXME hk0jd16g.
+    # Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
+    from chirho_diffeqpy.lang_interop import julianumpy
 
-# Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
-#  solver for testing.
-retcode = pytest.main(
-    [
-        f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
-        f"{chirho_root_path}/tests/dynamical/test_solver.py",
-        f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
-        f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
-        f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
-        f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
-        f"{chirho_root_path}/tests/dynamical/test_handler_composition.py",
+    # Also, import the global and per_test to register those dispatched reparametrizations.
+    import chirho_tests_reparametrized.global_reparametrizations
+    import chirho_tests_reparametrized.per_test_reparametrizations
 
-        # Not running these, as they presuppose impure dynamics.
-        #  Instead we're testing internally at .test_check_dynamics
-        # f"{chirho_root_path}/tests/dynamical/test_validate_dynamics.py",
+    # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
+    #  solver for testing.
+    retcode = pytest.main(
+        [
+            f"{chirho_root_path}/tests/dynamical/test_log_trajectory.py",
+            f"{chirho_root_path}/tests/dynamical/test_solver.py",
+            f"{chirho_root_path}/tests/dynamical/test_noop_interruptions.py",
+            f"{chirho_root_path}/tests/dynamical/test_static_observation.py",
+            f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
+            f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
+            f"{chirho_root_path}/tests/dynamical/test_handler_composition.py",
 
-        # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
-        # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
-        #  the early julicall import causes some kind of permission error in the fault handler.
-        # Solution: disable it.
-        "-p", "no:faulthandler",
-        # "-s"  # uncomment to print stuff during tests.
-    ],
-    plugins=[ReparametrizeWithDiffEqPySolver()]
-)
-sys.exit(retcode)
+            # Not running these, as they presuppose impure dynamics.
+            #  Instead, we're testing internally at .test_check_dynamics
+            # f"{chirho_root_path}/tests/dynamical/test_validate_dynamics.py",
+
+            # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
+            # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
+            #  the early julicall import causes some kind of permission error in the fault handler.
+            # Solution: disable it.
+            "-p", "no:faulthandler",
+            # "-s"  # uncomment to print stuff during tests.
+        ],
+        plugins=[ReparametrizeWithDiffEqPySolver()]
+    )
+    return retcode
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,7 +2,7 @@ import juliacall  # Must precede even indirect torch imports to preventshape seg
 import pytest
 import torch
 from chirho_diffeqpy.internals import pre_broadcast_initial_state
-from .fixtures import ab_xy_dynfuncs, ab_xy_prior
+from fixtures import ab_xy_dynfuncs, ab_xy_prior
 
 
 def exec_numpy_from_torch(func, state, params):

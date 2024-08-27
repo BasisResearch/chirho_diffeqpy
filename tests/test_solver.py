@@ -11,7 +11,7 @@ import torch
 from chirho_diffeqpy import DiffEqPy, ATempParams
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.handlers import LogTrajectory
-from .fixtures import ab_xy_dynfuncs, ab_xy_prior
+from fixtures import ab_xy_dynfuncs, ab_xy_prior
 
 pyro.settings.set(module_local_params=True)
 
@@ -97,18 +97,6 @@ def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_bac
         torch.autograd.gradcheck(wrapped_simulate, c_, atol=1e-4, check_undefined_grad=True)
 
 
-def test_compiling_with_different_dynamics_fails():
-
-    pytest.skip("Not Implemented")
-    # initial_state, atemp_params = ab_xy_prior()
-
-    # 1. Instantiate the solver instance.
-    # 2. Run the solver once with one dynamics.
-    # 3. Run the solver again with a different dynamics (don't instantiate a new one).
-    # 4. Make sure it throws a ValueError with message that includes:
-    #     "Lazily compiling a solver for a different dynamics than the one that was previously compiled"
-
-
 def test_compiling_with_different_shapes():
     # 1. Sample from two different platings from the prior, and make those plating show up in
     #      solver._lazily_compiled_solvers_by_shape
@@ -119,7 +107,3 @@ def test_compiling_with_different_shapes():
 # TODO test that simulating with a dynamics different from that which a solver was compiled for fails.
 # TODO test whether float64 is properly required of initial state for diffeqpy backend.
 # TODO test whether float64 is properly required of returned dstate even if initial state passes float64 check.
-
-# TODO not testing this here, but we'll need to do the following (see design doc):
-# 1) refactor the chirho tests to be parameterized wrt solver
-# 2) inject this solver into those tests and run them here.
