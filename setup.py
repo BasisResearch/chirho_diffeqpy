@@ -28,7 +28,7 @@ chirho_requirement = chirho_requirements[0]
 # chirho_requirement == "chirho[dynamical]==0.2.0" to chirho_requirement == "chirho[dynamical,test]==0.2.0"
 assert "[dynamical]" in chirho_requirement,\
     f"Expected chirho requirement to require dynamical extras option, got {chirho_requirement}."
-chirho_test_requirement = chirho_requirement.replace("]", "test]")
+chirho_test_requirement = chirho_requirement.replace("]", ", test]")
 
 setup(
     name="chirho_diffeqpy",
