@@ -7,6 +7,16 @@ def load_julia_env():
     # Use this instead of importing Main directly to ensure the proper environment is loaded.
     # Note that load_julia_packages also activates a Pkg environment with this stuff in it.
 
-    load_julia_packages("DifferentialEquations", "ModelingToolkit", "PythonCall", "Symbolics", "ForwardDiff")
+    # FIXME Install 7.11.0 diffeq, as later versions have breaking changes.
+    jl = load_julia_packages(
+        "DifferentialEquations@7.11.0",
+        "ModelingToolkit",
+        "PythonCall",
+        "Symbolics",
+        "ForwardDiff",
+        "SymbolicUtils"
+    )
+    # ...and pin it so it doesn't update on later Pkg.add calls.
+    jl.seval('Pkg.pin("DifferentialEquations")')
 
     return Main
