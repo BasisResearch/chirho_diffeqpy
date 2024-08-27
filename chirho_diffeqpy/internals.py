@@ -17,12 +17,13 @@ import numpy as np
 from typing import Union, Dict, Hashable
 from functools import singledispatch
 from chirho_diffeqpy.lang_interop import callable_from_julia
-from juliacall import Main as jl
 import numbers
 from copy import copy
 from chirho.indexed.ops import indices_of, gather
 from chirho_diffeqpy.lang_interop.ops import convert_julia_to_python, convert_python_to_julia
 from math import prod
+from .load_julia_env import load_julia_env
+jl = load_julia_env()
 
 jl.seval("using Symbolics")
 

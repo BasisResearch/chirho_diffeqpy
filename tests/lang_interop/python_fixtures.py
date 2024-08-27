@@ -2,13 +2,10 @@ from os.path import (
     dirname as dn,
     join as jn
 )
-import juliacall
 import numpy as np
 from itertools import product
-# Noop import to force package loading and diffeqpy julia environment activation.
-from diffeqpy.de import de
-
-jl = juliacall.Main.seval
+from chirho_diffeqpy.load_julia_env import load_julia_env
+jl = load_julia_env().seval
 
 julia_fixtures_pth = jn(dn(__file__), "julia_fixtures.jl")
 jl(f"include(\"{julia_fixtures_pth}\")")

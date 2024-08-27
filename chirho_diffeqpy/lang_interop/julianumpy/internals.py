@@ -2,7 +2,8 @@ from typing import Optional
 import numpy as np
 from functools import singledispatch
 from chirho.indexed.ops import gather
-from juliacall import Main as jl
+from ...load_julia_env import load_julia_env
+jl = load_julia_env()
 
 # TODO refactor the comments here. This solves two problems:
 #  1) julia things have all dunders defined, which means that they isinstance every base class in python, even
