@@ -8,7 +8,8 @@ import os.path as osp
 
 chirho_root_path = osp.dirname(osp.dirname(chirho.__file__))
 
-sys.path.remove(chirho_root_path)
+if chirho_root_path in sys.path:
+    sys.path.remove(chirho_root_path)
 sys.path.insert(0, chirho_root_path)
 
 # Check that chirho was installed as a source package with tests available.

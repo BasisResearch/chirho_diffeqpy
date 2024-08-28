@@ -16,6 +16,8 @@ def load_julia_env():
     pkg_spec = f'Pkg.PackageSpec(name="{pkg}", version="{v}")'
 
     # Manually do what the load_julia_packages does, but such that we can specify a version explicitly.
+    # Note that we don't import in the catch, as we want to precompile everything together.
+    # This avoids weird needs to restart julia after trying to precompile partial dependencies.
     script = f'''
     Pkg.activate(\"diffeqpy\", shared=true)
     import Pkg
@@ -25,14 +27,8 @@ def load_julia_env():
         e isa ArgumentError || throw(e)
         Pkg.add({pkg_spec})
         Pkg.pin({pkg_spec})
-        import {pkg}
     end
     '''
-    # script = f'''
-    # Pkg.add({pkg_spec})
-    # Pkg.pin({pkg_spec})
-    # import {pkg}
-    # '''
     jl.seval(script)
 
     # ...and pin it so it doesn't update on later Pkg.add calls.
