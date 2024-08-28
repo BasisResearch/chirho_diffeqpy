@@ -9,6 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: [ '3.11' ]
+        julia-version: [ '1.10' ]
         os: [ ubuntu-latest ]
 
     steps:
@@ -21,11 +22,15 @@ jobs:
             ~/.cache/pip
             ~/.julia
           key:
-            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.julia-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Set up Julia ${{ matrix.julia-version }}
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
       # TODO add setup for specific julia versions too.
       - name: Install pip
         run: |
