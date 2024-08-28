@@ -1,7 +1,13 @@
-The file `solver_reparametrized_chirho_tests.py` will not run under normal pytest conditions. It cannot, in fact,
-without a number of issues occurring. It must instead be run as a normal python script that will invoke chirho's
-dynamical systems module tests, but with the DiffEqPy solver instead of the chirho-provided solvers.
+# Testing
 
+This directory contains a set of repo-internal tests in addition to software that reparametrizes and runs chirho's
+existing dynamical systems tests against the `DiffEqPy` solver handler.
 
-TODO figure out how to dispatch `solver_reparametrized_chirho_tests.py` alongside the normal tests when running
-`pytest ...` from cmd line.
+`solver_reparametrized_chirho_tests.py` provides a `main` function that will reparametrize and execute chirho's
+existing test suite.
+
+`lang_interop` contains tests of julia-python language interoperation, primarily assessing forward and symbolic
+evaluation of python-defined functions from the julia side.
+
+`chirho_tests_reparametrized` is a module containing fixtures and tools for reparametrizing chirho's existing tests
+to be compatible with the `DiffEqPy` solver handler.

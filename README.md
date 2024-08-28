@@ -1,6 +1,9 @@
 # chirho_diffeqpy
 An experimental diffeqpy (DifferentialEquations.jl) backend for chirho's dynamical systems module.
 
+See `docs/source/performance_comparison.ipynb` for a comparison between chirho's default `TorchDiffEq` backend and the
+`DiffEqPy` backend provided here.
+
 
 ## Installation
 
