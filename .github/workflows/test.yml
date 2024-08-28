@@ -10,7 +10,7 @@ jobs:
       matrix:
         python-version: [ '3.11' ]
         julia-version: [ '1.10' ]
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-latest, macos-latest ]
 
     steps:
       - uses: actions/checkout@v3
@@ -19,6 +19,13 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         with:
           path: ~/.cache/pip
+          key:
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}
+      - name: macOS Python cache
+        uses: actions/cache@v4
+        if: startsWith(matrix.os, 'macOS')
+        with:
+          path: ~/Library/Caches/pip
           key:
             ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}
       # This uses the same path for ubuntu and macos, so we don't need an os-specific path here.
