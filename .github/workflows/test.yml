@@ -4,13 +4,24 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11"]
+        python-version: [ '3.11' ]
+        os: [ ubuntu-latest ]
 
     steps:
       - uses: actions/checkout@v3
+      - name: Ubuntu cache
+        uses: actions/cache@v1
+        if: startsWith(matrix.os, 'ubuntu')
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.julia
+          key:
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
