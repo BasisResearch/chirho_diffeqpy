@@ -14,15 +14,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Ubuntu cache
+      - name: Ubuntu Python cache
         uses: actions/cache@v4
         if: startsWith(matrix.os, 'ubuntu')
         with:
-          path: |
-            ~/.cache/pip
-            ~/.julia
+          path: ~/.cache/pip
           key:
-            ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.julia-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}
+      # This uses the same path for ubuntu and macos, so we don't need an os-specific path here.
+      - name: Julia cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.julia
+          key:
+            ${{ matrix.os }}-${{ matrix.julia-version }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -31,7 +36,6 @@ jobs:
         uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
-      # TODO add setup for specific julia versions too.
       - name: Install pip
         run: |
           python -m pip install --upgrade pip
