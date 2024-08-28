@@ -1,51 +1,60 @@
-from diffeqpy.__init__ import load_julia_packages
-from juliacall import Main as jl
+from diffeqpy.__init__ import _ensure_julia_installed
+
+
+# from diffeqpy.__init__ import load_julia_packages
+# A rehash of the load_julia_packages function in diffeqpy that takes versions.
+# Much is copied directly.
+def load_and_pin_julia_packages(**names_versions):
+    # This is terrifying to many people. However, it seems SciML takes pragmatic approach.
+    _ensure_julia_installed()
+
+    names = tuple(names_versions.keys())
+
+    pkgspecs = [
+        f'Pkg.PackageSpec(name="{n}", version="{v}")' if v is not None else f'Pkg.PackageSpec(name="{n}")'
+        for n, v in names_versions.items()
+    ]
+    pinspecs = [
+        f'Pkg.PackageSpec(name="{n}", version="{v}")' for n, v in names_versions.items()
+        if v is not None
+    ]
+
+    script = f'''import Pkg
+    Pkg.activate(\"diffeqpy\", shared=true)
+    try
+        import {", ".join(names)}
+    catch e
+        e isa ArgumentError || throw(e)
+        Pkg.add([{", ".join(pkgspecs)}])
+        Pkg.pin([{", ".join(pinspecs)}])
+        Pkg.resolve()
+        Pkg.precompile()
+        import {", ".join(names)}
+    end
+    {", ".join(names)}'''
+
+    # Unfortunately, `seval` doesn't support multi-line strings
+    # https://github.com/JuliaPy/PythonCall.jl/issues/433
+    script = script.replace("\n", ";")
+
+    # Must be loaded after `_ensure_julia_installed()`
+    from juliacall import Main as jl
+    return jl.seval(script), jl
 
 
 def load_julia_env():
-    """
-    Handles julia dependencies and imports. TODO use an explicit Project.toml that also covers diffeqpy's reqs?
-    Use this instead of `from juliacall import Main as jl` to ensure packages are loaded properly.
-    """
-
-    # <FIXME Pin to 7.11.0 diffeq>
-
-    # Later versions have breaking changes that need addressing...
-    pkg = "DifferentialEquations"
-    v = "7.11.0"
-    pkg_spec = f'Pkg.PackageSpec(name="{pkg}", version="{v}")'
-
-    # Manually do what the load_julia_packages does, but such that we can specify a version explicitly.
-    # Note that we don't import in the catch, as we want to precompile everything together.
-    # This avoids weird needs to restart julia after trying to precompile partial dependencies.
-    script = f'''
-    Pkg.activate(\"diffeqpy\", shared=true)
-    import Pkg
-    try
-        import {pkg}
-    catch e
-        e isa ArgumentError || throw(e)
-        Pkg.add({pkg_spec})
-        Pkg.pin({pkg_spec})
-    end
-    '''
-    jl.seval(script)
-
-    # ...and pin it so it doesn't update on later Pkg.add calls.
-    # </FIXME Pin to 7.11.0 diffeq>
-
     # The diffeqpy import handles just the first three packages, but we also need access to the latter
     #  three dependencies.
     # Note that load_julia_packages also activates a Pkg environment with this stuff in it.
 
-    # Run these afterward, as DifferentialEquations will
-    load_julia_packages(
-        "DifferentialEquations",  # <-- w/o this for now. See below.
-        "ModelingToolkit",
-        "PythonCall",
-        "Symbolics",
-        "ForwardDiff",
-        "SymbolicUtils"
+    _, jl = load_and_pin_julia_packages(
+        # Pinned to 7.11.0, as later versions introduce breaking changes. FIXME resolve
+        DifferentialEquations="7.11.0",
+        ModelingToolkit=None,
+        PythonCall=None,
+        Symbolics=None,
+        ForwardDiff=None,
+        SymbolicUtils=None,
     )
 
     return jl
