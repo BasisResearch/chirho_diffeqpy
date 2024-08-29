@@ -1,21 +1,23 @@
-import pytest
 import juliacall  # Must precede even indirect torch imports to prevent segfault.
+import pytest
 import torch
 
 # DiffEqPy requires float64s, so set the default here, and it will proc to the chirho tests.
 # Note that, for unknown reasons, this has to precede all certain imports or it "doesn't take" and we get float32s.
 torch.set_default_dtype(torch.float64)
 
-import chirho
-import sys
-import os.path as osp
-from chirho_diffeqpy import DiffEqPy
-from chirho_tests_reparametrized.fixtures_imported_from_chirho import chirho_root_path
-from chirho.dynamical.handlers.solver import Solver
-from chirho_tests_reparametrized.reparametrization import reparametrize_argument
 import inspect
-from typing import List, Tuple, Optional
+import os.path as osp
+import sys
 from functools import wraps
+from typing import List, Optional, Tuple
+
+import chirho
+from chirho.dynamical.handlers.solver import Solver
+from chirho_tests_reparametrized.fixtures_imported_from_chirho import chirho_root_path
+from chirho_tests_reparametrized.reparametrization import reparametrize_argument
+
+from chirho_diffeqpy import DiffEqPy
 
 
 def _args_include_solver(args: Tuple) -> bool:
@@ -35,7 +37,11 @@ def _marker_includes_solver(marker) -> bool:
 
 def _metafunc_includes_solver(metafunc) -> bool:
     markers = metafunc.definition.own_markers
-    return any(_marker_includes_solver(marker) for marker in markers if marker.name == "parametrize")
+    return any(
+        _marker_includes_solver(marker)
+        for marker in markers
+        if marker.name == "parametrize"
+    )
 
 
 def _is_arg_group(args) -> bool:
@@ -102,11 +108,15 @@ def _reparametrize_markers_in_place(metafunc) -> bool:
         #  this will result in redundant tests for all of those repeated cases where only the solver was varied.
         # Also, TODO gnwg18fk.
         try:
-            reparametrized_args_list = [_reparametrize_args(args, test_id=test_id) for args in args_list]
+            reparametrized_args_list = [
+                _reparametrize_args(args, test_id=test_id) for args in args_list
+            ]
         except Exception as e:
-            raise Exception(f"Errored while trying to reparametrize a solver argument in a parametrize marker for test "
-                            f"{test_name} at {test_file}:{test_line} with parametrized arguments "
-                            f"{args_name_str} = {args_list}. \n Original exception:\n {e}") from e
+            raise Exception(
+                f"Errored while trying to reparametrize a solver argument in a parametrize marker for test "
+                f"{test_name} at {test_file}:{test_line} with parametrized arguments "
+                f"{args_name_str} = {args_list}. \n Original exception:\n {e}"
+            ) from e
 
         args_list.clear()
         args_list.extend(reparametrized_args_list)
@@ -154,19 +164,21 @@ class ReparametrizeWithDiffEqPySolver:
         # metafunc.definition.own_markers.append(skip_mark)
 
         # TODO warnings module.
-        print(f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
-              f"solver, but not yet figured out how to dynamically skip individual tests.")
+        print(
+            f"WARNING: Would have skipped {metafunc.definition.nodeid}, as it wouldn't have exercised the DiffEqPy"
+            f"solver, but not yet figured out how to dynamically skip individual tests."
+        )
 
 
 def main():
     # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
     # See also, in test_solver: FIXME hk0jd16g.
     # Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
-    from chirho_diffeqpy.lang_interop import julianumpy
-
     # Also, import the global and per_test to register those dispatched reparametrizations.
     import chirho_tests_reparametrized.global_reparametrizations
     import chirho_tests_reparametrized.per_test_reparametrizations
+
+    from chirho_diffeqpy.lang_interop import julianumpy
 
     # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
     #  solver for testing.
@@ -179,19 +191,18 @@ def main():
             f"{chirho_root_path}/tests/dynamical/test_static_interventions.py",
             f"{chirho_root_path}/tests/dynamical/test_dynamic_interventions.py",
             f"{chirho_root_path}/tests/dynamical/test_handler_composition.py",
-
             # Not running these, as they presuppose impure dynamics.
             #  Instead, we're testing internally at .test_check_dynamics
             # f"{chirho_root_path}/tests/dynamical/test_validate_dynamics.py",
-
             # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
             # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
             #  the early julicall import causes some kind of permission error in the fault handler.
             # Solution: disable it.
-            "-p", "no:faulthandler",
+            "-p",
+            "no:faulthandler",
             # "-s"  # uncomment to print stuff during tests.
         ],
-        plugins=[ReparametrizeWithDiffEqPySolver()]
+        plugins=[ReparametrizeWithDiffEqPySolver()],
     )
     return retcode
 

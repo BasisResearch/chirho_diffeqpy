@@ -1,6 +1,7 @@
 # ty to ChatGPT
-import numpy as np
 from contextlib import nullcontext
+
+import numpy as np
 import pyro
 import pyro.distributions as dist
 
@@ -15,7 +16,7 @@ def flux_dynamics(state, atemp_params):
     y = state["y"]
 
     # Flux equations
-    dx = alpha * x * (1. - x / 10.) - beta * x * y
+    dx = alpha * x * (1.0 - x / 10.0) - beta * x * y
     dy = beta * x * y - y
 
     return dict(x=dx, y=dy)
@@ -32,7 +33,7 @@ def decay_dynamics(state, atemp_params):
     t = state["t"]
 
     # Decay equations
-    dx = -decay_rate_a * (np.sin(t) + 2.) * x
+    dx = -decay_rate_a * (np.sin(t) + 2.0) * x
     dy = -decay_rate_b * y
 
     return dict(x=dx, y=dy)
@@ -107,10 +108,26 @@ def ab_xy_prior(
     aplatesize=1,
     bplatesize=1,
 ):
-    xplate = pyro.plate("xplate", xplatesize, dim=-4) if xplatesize is not None else nullcontext()
-    yplate = pyro.plate("yplate", yplatesize, dim=-3) if yplatesize is not None else nullcontext()
-    aplate = pyro.plate("aplate", aplatesize, dim=-2) if aplatesize is not None else nullcontext()
-    bplate = pyro.plate("bplate", bplatesize, dim=-1) if bplatesize is not None else nullcontext()
+    xplate = (
+        pyro.plate("xplate", xplatesize, dim=-4)
+        if xplatesize is not None
+        else nullcontext()
+    )
+    yplate = (
+        pyro.plate("yplate", yplatesize, dim=-3)
+        if yplatesize is not None
+        else nullcontext()
+    )
+    aplate = (
+        pyro.plate("aplate", aplatesize, dim=-2)
+        if aplatesize is not None
+        else nullcontext()
+    )
+    bplate = (
+        pyro.plate("bplate", bplatesize, dim=-1)
+        if bplatesize is not None
+        else nullcontext()
+    )
 
     with xplate:
         x = pyro.sample("x", dist.Uniform(0.1, 1))

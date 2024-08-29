@@ -1,14 +1,16 @@
 import numpy as np
 import torch
+
+from chirho_diffeqpy.handlers import ATempParams, State
+from chirho_diffeqpy.internals import to_numpy
+
 from .fixtures_imported_from_chirho import (
-    UnifiedFixtureDynamicsBase,
     SIRObservationMixin,
     SIRReparamObservationMixin,
-    get_state_reached_event_f
+    UnifiedFixtureDynamicsBase,
+    get_state_reached_event_f,
 )
 from .mock_closure import MockDynamicsClosureAbstract
-from chirho_diffeqpy.handlers import State, ATempParams
-from chirho_diffeqpy.internals import to_numpy
 
 
 def isalambda(f):
@@ -25,7 +27,7 @@ def pure_sir_dynamics(state, atemp_params):
     dX = dict()
 
     beta = beta * (
-            1.0 + 0.1 * np.sin(0.1 * state["t"])
+        1.0 + 0.1 * np.sin(0.1 * state["t"])
     )  # beta oscilates slowly in time.
 
     dX["S"] = -beta * state["S"] * state["I"]  # noqa
@@ -35,25 +37,27 @@ def pure_sir_dynamics(state, atemp_params):
     return dX
 
 
-class MockClosureUnifiedFixtureDynamicsBase(MockDynamicsClosureAbstract, UnifiedFixtureDynamicsBase):
+class MockClosureUnifiedFixtureDynamicsBase(
+    MockDynamicsClosureAbstract, UnifiedFixtureDynamicsBase
+):
 
     def __init__(self, beta=None, gamma=None):
-        super().__init__(
-            pure_dynamics=pure_sir_dynamics,
-            beta=beta,
-            gamma=gamma
-        )
+        super().__init__(pure_dynamics=pure_sir_dynamics, beta=beta, gamma=gamma)
 
     @property
     def atemp_params(self):
         return dict(beta=self.beta, gamma=self.gamma)
 
 
-class MockClosureUnifiedFixtureDynamics(MockClosureUnifiedFixtureDynamicsBase, SIRObservationMixin):
+class MockClosureUnifiedFixtureDynamics(
+    MockClosureUnifiedFixtureDynamicsBase, SIRObservationMixin
+):
     pass
 
 
-class MockClosureUnifiedFixtureDynamicsReparam(MockClosureUnifiedFixtureDynamicsBase, SIRReparamObservationMixin):
+class MockClosureUnifiedFixtureDynamicsReparam(
+    MockClosureUnifiedFixtureDynamicsBase, SIRReparamObservationMixin
+):
     pass
 
 
@@ -68,11 +72,15 @@ class MockClosureDynamicsDirectPass(MockDynamicsClosureAbstract):
         return self._atemp_params
 
 
-def build_state_reached_pure_event_fn(target_state: State[torch.tensor], event_dim: int = 0):
+def build_state_reached_pure_event_fn(
+    target_state: State[torch.tensor], event_dim: int = 0
+):
     target_state_np = to_numpy(target_state)
     impure_event_f = get_state_reached_event_f(target_state_np, event_dim)
 
-    def pure_event_f(t: float, state: State[np.ndarray], atemp_params: ATempParams[np.ndarray]):
+    def pure_event_f(
+        t: float, state: State[np.ndarray], atemp_params: ATempParams[np.ndarray]
+    ):
         return impure_event_f(t, state)
 
     return pure_event_f

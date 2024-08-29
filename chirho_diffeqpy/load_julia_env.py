@@ -11,15 +11,20 @@ def load_and_pin_julia_packages(**names_versions):
     names = tuple(names_versions.keys())
 
     pkgspecs = [
-        f'Pkg.PackageSpec(name="{n}", version="{v}")' if v is not None else f'Pkg.PackageSpec(name="{n}")'
+        (
+            f'Pkg.PackageSpec(name="{n}", version="{v}")'
+            if v is not None
+            else f'Pkg.PackageSpec(name="{n}")'
+        )
         for n, v in names_versions.items()
     ]
     pinspecs = [
-        f'Pkg.PackageSpec(name="{n}", version="{v}")' for n, v in names_versions.items()
+        f'Pkg.PackageSpec(name="{n}", version="{v}")'
+        for n, v in names_versions.items()
         if v is not None
     ]
 
-    script = f'''import Pkg
+    script = f"""import Pkg
     Pkg.activate(\"diffeqpy\", shared=true)
     try
         import {", ".join(names)}
@@ -31,7 +36,7 @@ def load_and_pin_julia_packages(**names_versions):
         Pkg.precompile()
         import {", ".join(names)}
     end
-    {", ".join(names)}'''
+    {", ".join(names)}"""
 
     # Unfortunately, `seval` doesn't support multi-line strings
     # https://github.com/JuliaPy/PythonCall.jl/issues/433
@@ -39,6 +44,7 @@ def load_and_pin_julia_packages(**names_versions):
 
     # Must be loaded after `_ensure_julia_installed()`
     from juliacall import Main as jl
+
     return jl.seval(script), jl
 
 

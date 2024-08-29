@@ -1,7 +1,8 @@
-from .internals import JuliaThingWrapper
-from ..ops import convert_julia_to_python
 import numpy as np
 from juliacall import ArrayValue
+
+from ..ops import convert_julia_to_python
+from .internals import JuliaThingWrapper
 
 
 @convert_julia_to_python.register

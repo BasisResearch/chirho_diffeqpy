@@ -1,14 +1,13 @@
 import logging
-
-from chirho_diffeqpy import ATempParams, DiffEqPy
 from importlib import import_module
 
 import pyro
 import pytest
 import torch
-
 from chirho.dynamical.internals.solver import check_dynamics
 from chirho.dynamical.ops import State, simulate
+
+from chirho_diffeqpy import ATempParams, DiffEqPy
 
 pyro.settings.set(module_local_params=True)
 
@@ -33,7 +32,9 @@ def invalid_diff_bc_torch(state: State, atemp_params: ATempParams) -> State:
     return dict(S=torch.tensor(1.0))
 
 
-@pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
+@pytest.mark.parametrize(
+    "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
+)
 def test_validate_dynamics_diffeqpy_sample(lang_interop_backend):
     solver = DiffEqPy
 
@@ -62,7 +63,9 @@ def test_validate_dynamics_diffeqpy_sample(lang_interop_backend):
     assert "does not allow `pyro.sample` calls" in str(e.value)
 
 
-@pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
+@pytest.mark.parametrize(
+    "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
+)
 def test_validate_dynamics_setting_diffeqpy(lang_interop_backend):
     solver = DiffEqPy
 
@@ -93,7 +96,9 @@ def test_validate_dynamics_setting_diffeqpy(lang_interop_backend):
         assert "does not allow `pyro.sample` calls" in str(e.value)
 
 
-@pytest.mark.parametrize("lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"])
+@pytest.mark.parametrize(
+    "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
+)
 def test_validate_dynamics_diffeqpy_torch(lang_interop_backend):
     solver = DiffEqPy
 
