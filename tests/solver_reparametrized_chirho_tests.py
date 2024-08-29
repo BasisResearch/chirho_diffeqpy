@@ -1,4 +1,9 @@
-import juliacall  # Must precede even indirect torch imports to prevent segfault.
+import inspect
+import sys
+from typing import Optional, Tuple
+
+# Must precede even indirect torch imports to prevent segfault.
+import juliacall  # noqa: F401
 import pytest
 import torch
 
@@ -6,18 +11,13 @@ import torch
 # Note that, for unknown reasons, this has to precede all certain imports or it "doesn't take" and we get float32s.
 torch.set_default_dtype(torch.float64)
 
-import inspect
-import os.path as osp
-import sys
-from functools import wraps
-from typing import List, Optional, Tuple
-
-import chirho
-from chirho.dynamical.handlers.solver import Solver
-from chirho_tests_reparametrized.fixtures_imported_from_chirho import chirho_root_path
-from chirho_tests_reparametrized.reparametrization import reparametrize_argument
-
-from chirho_diffeqpy import DiffEqPy
+from chirho.dynamical.handlers.solver import Solver  # noqa: E402
+from chirho_tests_reparametrized.fixtures_imported_from_chirho import (  # noqa: E402
+    chirho_root_path,
+)
+from chirho_tests_reparametrized.reparametrization import (  # noqa: E402
+    reparametrize_argument,
+)
 
 
 def _args_include_solver(args: Tuple) -> bool:
@@ -173,12 +173,13 @@ class ReparametrizeWithDiffEqPySolver:
 def main():
     # TODO what about generating separate solver instance parametrizations for every lang_interop backend?
     # See also, in test_solver: FIXME hk0jd16g.
-    # Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion functions.
+    # Unused import to register the lang_interop machinery. This registers a bunch of type dispatch conversion
+    #  functions.
     # Also, import the global and per_test to register those dispatched reparametrizations.
-    import chirho_tests_reparametrized.global_reparametrizations
-    import chirho_tests_reparametrized.per_test_reparametrizations
+    import chirho_tests_reparametrized.global_reparametrizations  # noqa: F401
+    import chirho_tests_reparametrized.per_test_reparametrizations  # noqa: F401
 
-    from chirho_diffeqpy.lang_interop import julianumpy
+    from chirho_diffeqpy.lang_interop import julianumpy  # noqa: F401
 
     # Programmatically execute chirho's dynamical systems test suite. Pass the plugin that will splice in the DiffEqPy
     #  solver for testing.
@@ -194,7 +195,8 @@ def main():
             # Not running these, as they presuppose impure dynamics.
             #  Instead, we're testing internally at .test_check_dynamics
             # f"{chirho_root_path}/tests/dynamical/test_validate_dynamics.py",
-            # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting interaction.
+            # The fault handler bottoms out for some reason related to juliacall and torch's weird segfaulting
+            #  interaction.
             # The current implementation does NOT segfault, as long as juliacall is imported before torch, but adding
             #  the early julicall import causes some kind of permission error in the fault handler.
             # Solution: disable it.

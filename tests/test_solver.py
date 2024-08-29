@@ -1,14 +1,14 @@
 import logging
 from importlib import import_module
 
-import juliacall  # Must precede even indirect torch imports to prevent segfault.
+# Must precede even indirect torch imports to prevent segfault.
+import juliacall  # noqa: F401
 import numpy as np
 import pyro
 import pytest
 import torch
 from chirho.dynamical.handlers import LogTrajectory
 from chirho.dynamical.ops import State, simulate
-from fixtures import ab_xy_dynfuncs, ab_xy_prior
 
 from chirho_diffeqpy import ATempParams, DiffEqPy
 

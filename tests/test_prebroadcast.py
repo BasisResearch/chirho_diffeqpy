@@ -1,4 +1,5 @@
-import juliacall  # Must precede even indirect torch imports to preventshape segfault.
+# Must precede even indirect torch imports to preventshape segfault.
+import juliacall  # noqa: F401
 import pytest
 import torch
 from fixtures import ab_xy_dynfuncs, ab_xy_prior

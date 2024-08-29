@@ -1,6 +1,3 @@
-from functools import singledispatch
-
-import numpy as np
 import torch
 from chirho.dynamical.handlers.solver import Solver, TorchDiffEq
 
@@ -10,7 +7,7 @@ from .fixtures import (
     MockClosureUnifiedFixtureDynamicsReparam,
     build_state_reached_pure_event_fn,
 )
-from .fixtures_imported_from_chirho import (
+from .fixtures_imported_from_chirho import (  # noqa: F401
     RandBetaUnifiedFixtureDynamics,
     SIRObservationMixin,
     SIRReparamObservationMixin,

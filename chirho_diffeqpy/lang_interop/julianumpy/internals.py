@@ -186,9 +186,7 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         return regular_array.view(_JuliaThingWrapperArray)
 
     @staticmethod
-    def unwrap_array(
-        arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype: Optional = None
-    ):
+    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype=None):
 
         if out is not None and out_dtype is not None:
             raise ValueError(

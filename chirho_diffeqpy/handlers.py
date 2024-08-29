@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import Callable, Dict, Tuple, TypeVar
+from typing import Dict, Tuple, TypeVar
 
 import numpy as np
-import torch
-from chirho.dynamical.internals.solver import Interruption, Solver, State
-from diffeqpy import de
+from chirho.dynamical.internals.solver import Interruption, Solver, State  # noqa: F401
+from diffeqpy import de  # noqa: F401
 from torch import Tensor as Tnsr
 
 from .internals import (
@@ -54,22 +53,22 @@ class DiffEqPy(Solver[Tnsr]):
             PureEventFn[np.ndarray], Dict[MappingShapePair, de.VectorContinuousCallback]
         ] = dict()
 
-    def _get_or_create_compilations_for_dynamics(self, dynamics: PureDynamics[Tnsr]):
+    def _get_or_create_compilations_for_dynamics(
+        self, dynamics: PureDynamics[np.ndarray]
+    ):
         if dynamics not in self._lazily_compiled_solvers:
-            self._lazily_compiled_solvers[dynamics]: Dict[
-                MappingShapePair, de.ODEProblem
-            ] = dict()
+            self._lazily_compiled_solvers[dynamics] = dict()
         return self._lazily_compiled_solvers[dynamics]
 
-    def _get_or_create_compilations_for_event_fns(self, event_fn: PureEventFn[Tnsr]):
+    def _get_or_create_compilations_for_event_fns(
+        self, event_fn: PureEventFn[np.ndarray]
+    ):
         if event_fn not in self._lazily_compiled_event_fns:
-            self._lazily_compiled_event_fns[event_fn]: Dict[
-                MappingShapePair, de.VectorContinuousCallback
-            ] = dict()
+            self._lazily_compiled_event_fns[event_fn] = dict()
         return self._lazily_compiled_event_fns[event_fn]
 
     @staticmethod
-    def _get_atemp_params_from_msg(msg) -> (ATempParams, Dict):
+    def _get_atemp_params_from_msg(msg) -> Tuple[ATempParams, Dict]:
         # We don't modify the msg["kwargs"] in case some outer process is expecting it to remain constant.
         kwargs = copy(msg["kwargs"])
         # But the kwargs that we want to pass on to our stuff will need to have the params extracted,

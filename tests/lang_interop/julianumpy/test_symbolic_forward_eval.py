@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 # Unused import to register the conversion overloads.
-import chirho_diffeqpy.lang_interop.julianumpy
+import chirho_diffeqpy.lang_interop.julianumpy  # noqa: F401
 from chirho_diffeqpy.lang_interop import callable_from_julia
 
 from ..python_fixtures import (

@@ -1,6 +1,5 @@
 import functools
 import numbers
-from copy import copy
 from functools import singledispatch
 from math import prod
 from typing import (
@@ -20,7 +19,7 @@ import numpy as np
 import pyro
 import torch
 from chirho.dynamical.handlers.interruption import StaticEvent, ZeroEvent
-from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
+from chirho.dynamical.internals._utils import _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
@@ -29,10 +28,6 @@ from juliatorch import JuliaFunction
 from torch import Tensor as Tnsr
 
 from chirho_diffeqpy.lang_interop import callable_from_julia
-from chirho_diffeqpy.lang_interop.ops import (
-    convert_julia_to_python,
-    convert_python_to_julia,
-)
 
 from .load_julia_env import load_julia_env
 
@@ -148,9 +143,10 @@ def diffeqdotjl_compile_problem(
     require_float64(atemp_params)
     require_float64(dict(start_time=start_time, end_time=end_time))
 
-    # See the note below for why this must be a pure function and cannot use the values in initial_atemp_params directly.
-    # callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the preallocated
-    #  output array as the first argument (as opposed to listing out as a keyword, which is the default expectation).
+    # See the note below for why this must be a pure function and cannot use the values in initial_atemp_params
+    # directly. callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the
+    #  preallocated output array as the first argument (as opposed to listing out as a keyword, which is the
+    #  default expectation).
     # diffeqpy, when compiling the dynamics function, passes the output array as the first argument.
     @callable_from_julia(out_as_first_arg=True)
     def ode_f(flat_state, flat_inner_atemp_params, t):
@@ -233,7 +229,7 @@ def _lazily_compile_event_fn_callback(
     raise NotImplementedError()
 
 
-def get_var_order(mapping: Mapping[str, Tnsr]) -> Tuple[str, ...]:
+def get_var_order(mapping: Mapping[str, Union[Tnsr, np.ndarray]]) -> Tuple[str, ...]:
     return _var_order(frozenset(mapping.keys()))
 
 
@@ -260,8 +256,8 @@ def flat_cat_numpy(*vs: np.ndarray):
 
 # TODO ofwr1948 replace with generic pytree flatten/unflatten?
 def _flatten_mapping(
-    mapping: Mapping[str, Union[Tnsr, np.ndarray]]
-) -> Union[Tnsr, np.ndarray]:
+    mapping,  #: Mapping[str, Union[Tnsr, np.ndarray]]  # TODO do17bdy1t
+):  # -> Union[Tnsr, np.ndarray]:  # TODO do17bdy1t
     if len(mapping) == 0:
         # TODO do17bdy1t address type specificity
         return torch.tensor([], dtype=torch.float64)
@@ -558,7 +554,7 @@ def diffeqdotjl_simulate_point(
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
-    atemp_params: ATempParams[T],
+    atemp_params: ATempParams[torch.Tensor],
     **kwargs,
 ) -> State[torch.Tensor]:
     timespan = torch.stack((start_time, end_time))
@@ -622,8 +618,8 @@ def diffeqdotjl_compile_event_fn_callback(
     except TypeError as e:
         if "takes 2 positional arguments but 3 were given" in str(e):
             raise ValueError(
-                f"event_fn for use with the DiffEqPy backend must take both state and parameters as"
-                f" arguments."
+                "event_fn for use with the DiffEqPy backend must take both state and parameters as"
+                " arguments."
             )
     numel_out = numel(ret1)
 
@@ -653,8 +649,8 @@ def diffeqdotjl_compile_event_fn_callback(
     jl.seval(
         f"@variables uvec[1:{len(flat_initial_state)}], t, pvec[1:{len(flat_atemp_params)}]"
     )
-    jl.seval(f"u = Symbolics.scalarize(uvec)")
-    jl.seval(f"p = Symbolics.scalarize(pvec)")
+    jl.seval("u = Symbolics.scalarize(uvec)")
+    jl.seval("p = Symbolics.scalarize(pvec)")
     # Make just a generic empty output vector of type Num with length numel_out.
     jl.seval(f"out = [Num(0) for _ in 1:{numel_out}]")
 
