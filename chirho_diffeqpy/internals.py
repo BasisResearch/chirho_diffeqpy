@@ -1,8 +1,8 @@
 import functools
 import numbers
+from copy import copy
 from functools import singledispatch
 from math import prod
-from copy import copy
 from typing import (
     Callable,
     Dict,
@@ -372,7 +372,7 @@ def _diffeqdotjl_ode_simulate_inner(
             alg,
             callback=_diffeqdotjl_callback,
             saveat=tspan,
-            **kwargs_copy
+            **kwargs_copy,
         )
 
         # Get the end time of the trajectory. Note that this may precede elements in the tspan if the solver
