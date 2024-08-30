@@ -2,6 +2,7 @@ import functools
 import numbers
 from functools import singledispatch
 from math import prod
+from copy import copy
 from typing import (
     Callable,
     Dict,
@@ -361,10 +362,17 @@ def _diffeqdotjl_ode_simulate_inner(
             compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1])
         )
 
+        kwargs_copy = copy(kwargs)
+        alg = kwargs_copy.pop("alg", None)
+
         # Passing saveat means we won't save dense higher order interpolants. This saves on memory, and still lets us
         #  evaluate at the requested times later, as if interpolating.
         sol = de.solve(
-            remade_compiled_prob, callback=_diffeqdotjl_callback, saveat=tspan, **kwargs
+            remade_compiled_prob,
+            alg,
+            callback=_diffeqdotjl_callback,
+            saveat=tspan,
+            **kwargs_copy
         )
 
         # Get the end time of the trajectory. Note that this may precede elements in the tspan if the solver

@@ -9,6 +9,7 @@ import pytest
 import torch
 from chirho.dynamical.handlers import LogTrajectory
 from chirho.dynamical.ops import State, simulate
+from diffeqpy import de
 
 from chirho_diffeqpy import ATempParams, DiffEqPy
 
@@ -18,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("solver", [DiffEqPy])
+@pytest.mark.parametrize("alg", [None, de.Vern7(), de.AutoTsit5(de.Rosenbrock23()), "dont pass"])
 @pytest.mark.parametrize(
     "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
 )
-def test_forward_correct(solver, lang_interop_backend):
+def test_forward_correct(solver, alg, lang_interop_backend):
 
     # This loads the conversion operation overloads for a particular backend.
     # FIXME hk0jd16g will these overloads bleed into other tests?
@@ -34,8 +36,10 @@ def test_forward_correct(solver, lang_interop_backend):
     def dynamics(s: State, p: ATempParams) -> State:
         return dict(x=-(s["x"] * p["c"]))
 
+    solver_instance = solver(alg=alg) if alg != "dont pass" else solver()
+
     with LogTrajectory(timespan) as lt:
-        with solver():
+        with solver_instance:
             simulate(
                 dynamics,
                 u0,
