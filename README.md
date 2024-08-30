@@ -2,7 +2,17 @@
 An experimental diffeqpy (DifferentialEquations.jl) backend for chirho's dynamical systems module.
 
 See `docs/source/performance_comparison.ipynb` for a comparison between chirho's default `TorchDiffEq` backend and the
-`DiffEqPy` backend provided here.
+`DiffEqPy` backend provided here. That notebook also covers usage examples and differences between `DiffEqPy` and
+`TorchDiffEq` compatible definitions of dynamics.
+
+See [this guide](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve) on selecting a solver algorithm for your
+problem. Algorithms and tolerances can be specified at solver instantiation time, as shown below. All arguments are 
+optional, but must be specified as key word arguments.
+```python
+from diffeqpy import de
+from chirho_diffeqpy import DiffEqPy
+solver_instance = DiffEqPy(reltol=1e-6, abstol=1e-8, alg=de.Vern7())
+```
 
 
 ## Installation
