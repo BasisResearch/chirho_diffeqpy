@@ -10,7 +10,7 @@ from .fixtures_imported_from_chirho import (
     UnifiedFixtureDynamicsBase,
     get_state_reached_event_f,
 )
-from .mock_closure import MockDynamicsClosureAbstract
+from .mock_closure import MockDynamicsClosurePassPure
 
 
 def isalambda(f):
@@ -38,7 +38,7 @@ def pure_sir_dynamics(state, atemp_params):
 
 
 class MockClosureUnifiedFixtureDynamicsBase(
-    MockDynamicsClosureAbstract, UnifiedFixtureDynamicsBase
+    MockDynamicsClosurePassPure, UnifiedFixtureDynamicsBase
 ):
 
     def __init__(self, beta=None, gamma=None):
@@ -61,7 +61,7 @@ class MockClosureUnifiedFixtureDynamicsReparam(
     pass
 
 
-class MockClosureDynamicsDirectPass(MockDynamicsClosureAbstract):
+class MockClosureDynamicsDirectPass(MockDynamicsClosurePassPure):
 
     def __init__(self, dynamics, atemp_params):
         super().__init__(pure_dynamics=dynamics)

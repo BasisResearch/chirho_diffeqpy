@@ -19,7 +19,7 @@ from .fixtures_imported_from_chirho import (  # noqa: F401
     model_with_param_in_state,
     sir_param_prior,
 )
-from .mock_closure import DiffEqPyMockClosureCapable
+from .mock_closure import DiffEqPyMockClosureCapableSingleCompile
 from .reparametrization import (
     reparametrize_argument_by_type,
     reparametrize_argument_by_value,
@@ -31,14 +31,14 @@ from .reparametrization import (
 @reparametrize_argument_by_type.register(Solver)
 def _(*args, **kwargs):
     # ...return instance of MockClosure capable DiffEqPy solver.
-    return DiffEqPyMockClosureCapable()
+    return DiffEqPyMockClosureCapableSingleCompile()
 
 
 # Given the TorchDiffEq class itself...
 @reparametrize_argument_by_value.register(TorchDiffEq)
 def _(*args, **kwargs):
     # ...still return an instance. See DiffEqPyMockClosureCapable.__call__ for the rationale.
-    return DiffEqPyMockClosureCapable()
+    return DiffEqPyMockClosureCapableSingleCompile()
 
 
 # </Solver>
