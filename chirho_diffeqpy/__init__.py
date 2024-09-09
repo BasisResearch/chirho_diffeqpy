@@ -17,5 +17,6 @@ from .handlers import (  # noqa: F401, E402
     DiffEqPy,
     DiffEqPyMockClosureCapable,
     MockDynamicsClosureMixin,
+    PureTorchDiffEq
 )
 from .internals import ATempParams, PureDynamics  # noqa: F401, E402
