@@ -10,8 +10,12 @@ import torch
 from chirho.dynamical.handlers import LogTrajectory
 from chirho.dynamical.ops import State, simulate
 from diffeqpy import de
+from fixtures import logistic_growth_dynamics
+import time
 
 from chirho_diffeqpy import ATempParams, DiffEqPy
+
+from chirho.dynamical.handlers import DynamicIntervention
 
 pyro.settings.set(module_local_params=True)
 
@@ -137,6 +141,57 @@ def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_bac
         torch.autograd.gradcheck(
             wrapped_simulate, c_, atol=1e-4, check_undefined_grad=True
         )
+
+@pytest.mark.parametrize("solver", [DiffEqPy])
+@pytest.mark.parametrize(
+    "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
+)
+def test_second_run_of_double_dynamical_interventions(solver, lang_interop_backend):
+    """
+    This tests for a now-resolved bug where the second run of a simulation with two dynamical interventions would
+    fail. This was likely due to some kind of caching in the VectorContinuousCallback that was being cached. Now
+    we cache only the inner compilation of the event_fn, and re-wrap in new callbacks for each simulation.
+    """
+
+    # This loads the conversion operation overloads for a particular backend.
+    # FIXME hk0jd16g will these overloads bleed into other tests?
+    import_module(lang_interop_backend)
+
+    solver_instance = solver()
+
+    def growth_event_fn_x(t, state, atemp_params):
+        return state["x"] - 3.0
+
+    def growth_event_fn_y(t, state, atemp_params):
+        return state["y"] - 5.0
+
+    times = []
+    results = []
+    for _ in range(3):
+        start_time = time.time()
+        with solver_instance, LogTrajectory(torch.linspace(0.0, 30.0, 30)) as lt:
+            with DynamicIntervention(growth_event_fn_x, dict(x=torch.tensor(1.0))):
+                with DynamicIntervention(growth_event_fn_y, dict(y=torch.tensor(1.0))):
+                    simulate(
+                        logistic_growth_dynamics,
+                        dict(x=torch.tensor(1.0), y=torch.tensor(1.0)),
+                        torch.tensor(0.0),
+                        torch.tensor(30.),
+                        atemp_params=dict(a=torch.tensor(0.5), b=torch.tensor(10.0))
+                    )
+        times.append(time.time() - start_time)
+        results.append(lt.trajectory)
+
+    # Assert that the first time is 10x longer than the subsequent runs (for compilation).
+    # In practice, it's much more than this.
+    assert times[0] > 10 * times[1]
+    assert times[0] > 10 * times[2]
+
+    # Assert that the trajectories are all the same.
+    assert torch.allclose(results[0]["x"], results[1]["x"])
+    assert torch.allclose(results[0]["x"], results[2]["x"])
+    assert torch.allclose(results[0]["y"], results[1]["y"])
+    assert torch.allclose(results[0]["y"], results[2]["y"])
 
 
 def test_compiling_with_different_shapes():

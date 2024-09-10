@@ -627,7 +627,7 @@ def diffeqdotjl_compile_event_fn_callback(
         if "takes 2 positional arguments but 3 were given" in str(e):
             raise ValueError(
                 "event_fn for use with the DiffEqPy backend must take both state and parameters as"
-                " arguments."
+                " arguments. All told, it should acccept three arguments: time, state, and parameters."
             )
         raise
     numel_out = numel(ret1)
