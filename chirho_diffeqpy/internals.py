@@ -629,6 +629,7 @@ def diffeqdotjl_compile_event_fn_callback(
                 "event_fn for use with the DiffEqPy backend must take both state and parameters as"
                 " arguments."
             )
+        raise
     numel_out = numel(ret1)
 
     # Define the inner bit of the condition function that we're going to compile.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import Dict, Tuple, TypeVar, Callable
+from typing import Callable, Dict, Tuple, TypeVar
 
 import numpy as np
 from chirho.dynamical.internals.solver import Interruption, Solver, State  # noqa: F401
