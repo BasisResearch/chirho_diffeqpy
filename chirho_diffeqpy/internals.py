@@ -226,7 +226,7 @@ def _lazily_compile_event_fn_callback(
     interruption: Interruption,
     initial_state: State[Tnsr],
     atemp_params: ATempParams[Tnsr],
-) -> de.VectorContinuousCallback:
+) -> Tuple[Callable, int]:
     raise NotImplementedError()
 
 
@@ -602,7 +602,7 @@ def diffeqdotjl_compile_event_fn_callback(
     interruption: Interruption,
     initial_state: State[Tnsr],
     atemp_params: ATempParams[Tnsr],
-) -> de.VectorContinuousCallback:
+) -> Tuple[Callable, int]:
     if not isinstance(interruption.predicate, ZeroEvent):
         raise ValueError(
             "event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
@@ -690,8 +690,16 @@ def diffeqdotjl_compile_event_fn_callback(
     """
     )
 
-    # The "affect" function is only called a single time, so we can just use python. This
-    #  function also tracks which interruption triggered the termination.
+    return getattr(jl, f"condition_{affect_uuid}"), numel_out
+
+
+# TODO HACK 18wfghjfs541
+# Can this go in the solver somehow so we don't have a global?
+_last_triggered_interruption_ptr = [None]  # type: List[Optional[Interruption]]
+
+
+def make_affect_b(interruption):
+
     def affect_b(integrator, *_):
         # TODO HACK 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
         #  to directly track which interruption was responsible for termination is a lot cleaner than running
@@ -699,18 +707,7 @@ def diffeqdotjl_compile_event_fn_callback(
         _last_triggered_interruption_ptr[0] = interruption
         de.terminate_b(integrator)
 
-    # Return the callback involving only juila functions.
-    return de.VectorContinuousCallback(
-        # jl.condition_,
-        getattr(jl, f"condition_{affect_uuid}"),
-        affect_b,
-        numel_out,
-    )
-
-
-# TODO HACK 18wfghjfs541
-# Can this go in the solver somehow so we don't have a global?
-_last_triggered_interruption_ptr = [None]  # type: List[Optional[Interruption]]
+    return affect_b
 
 
 def _diffeqdotjl_build_combined_event_f_callback(
@@ -721,9 +718,15 @@ def _diffeqdotjl_build_combined_event_f_callback(
     cbs = []
 
     for i, interruption in enumerate(interruptions):
-        vc_cb = _lazily_compile_event_fn_callback(
+        compiled_condition, numel_out = _lazily_compile_event_fn_callback(
             interruption, initial_state, atemp_params
-        )  # type: de.VectorContinuousCallback
+        )
+
+        vc_cb = de.VectorContinuousCallback(
+            compiled_condition,
+            make_affect_b(interruption),
+            numel_out,
+        )
 
         cbs.append(vc_cb)
 

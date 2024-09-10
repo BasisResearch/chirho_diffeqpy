@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import Dict, Tuple, TypeVar
+from typing import Dict, Tuple, TypeVar, Callable
 
 import numpy as np
 from chirho.dynamical.internals.solver import Interruption, Solver, State  # noqa: F401
@@ -50,7 +50,7 @@ class DiffEqPy(Solver[Tnsr]):
         # Lazily compile event fns used in this context. Compilations are organized first by the interruption object
         #  and then, as above, by the shapes of the (prebroadcasted) state and atemp_params.
         self._lazily_compiled_event_fns: Dict[
-            PureEventFn[np.ndarray], Dict[MappingShapePair, de.VectorContinuousCallback]
+            PureEventFn[np.ndarray], Dict[MappingShapePair, Tuple[Callable, int]]
         ] = dict()
 
     def _get_or_create_compilations_for_dynamics(
