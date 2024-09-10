@@ -1,4 +1,5 @@
 import logging
+import time
 from importlib import import_module
 
 # Must precede even indirect torch imports to prevent segfault.
@@ -7,15 +8,12 @@ import numpy as np
 import pyro
 import pytest
 import torch
-from chirho.dynamical.handlers import LogTrajectory
+from chirho.dynamical.handlers import DynamicIntervention, LogTrajectory
 from chirho.dynamical.ops import State, simulate
 from diffeqpy import de
 from fixtures import logistic_growth_dynamics
-import time
 
 from chirho_diffeqpy import ATempParams, DiffEqPy
-
-from chirho.dynamical.handlers import DynamicIntervention
 
 pyro.settings.set(module_local_params=True)
 
@@ -142,6 +140,7 @@ def test_compile_forward_and_gradcheck(solver, x0, c_, dynfunc, lang_interop_bac
             wrapped_simulate, c_, atol=1e-4, check_undefined_grad=True
         )
 
+
 @pytest.mark.parametrize("solver", [DiffEqPy])
 @pytest.mark.parametrize(
     "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
@@ -176,8 +175,8 @@ def test_second_run_of_double_dynamical_interventions(solver, lang_interop_backe
                         logistic_growth_dynamics,
                         dict(x=torch.tensor(1.0), y=torch.tensor(1.0)),
                         torch.tensor(0.0),
-                        torch.tensor(30.),
-                        atemp_params=dict(a=torch.tensor(0.5), b=torch.tensor(10.0))
+                        torch.tensor(30.0),
+                        atemp_params=dict(a=torch.tensor(0.5), b=torch.tensor(10.0)),
                     )
         times.append(time.time() - start_time)
         results.append(lt.trajectory)
