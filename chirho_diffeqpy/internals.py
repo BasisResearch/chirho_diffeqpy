@@ -252,7 +252,9 @@ def flat_cat_torch(*vs: Tnsr):
 
 @flat_cat.register
 def flat_cat_numpy(*vs: np.ndarray):
-    return np.concatenate([v.ravel() for v in vs])
+    # The hasattr check lets us handle scalars and arrays stacked together.
+    # And this doens't use a dispatch because the scalar might be wrapped in an arbitrary type.
+    return np.concatenate([v.ravel() if hasattr(v, "ravel") else np.array([v]) for v in vs])
 
 
 # TODO ofwr1948 replace with generic pytree flatten/unflatten?
