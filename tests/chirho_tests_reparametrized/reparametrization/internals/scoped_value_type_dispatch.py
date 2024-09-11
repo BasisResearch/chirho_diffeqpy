@@ -1,7 +1,7 @@
 from functools import singledispatch
-from .singledispatch_on_value import singledispatch_on_value
-from typing import Callable, Dict, Tuple, Optional
+from typing import Callable, Dict, Optional, Tuple
 
+from .singledispatch_on_value import singledispatch_on_value
 
 _scopes: Dict[str, Tuple[Callable, Callable]] = dict()
 
@@ -37,9 +37,12 @@ class _ReparametrizeWithinScope:
     Reparametrize according to a particular scope, falling back to the global scope if the dispatch fails and
     the scope wasn't already global.
     """
+
     def __call__(self, dispatch_arg, *args, scope: str = "global", **kwargs):
-        fail_msg = (f"Failed to find dispatch by value or by type, at first for scope {scope},"
-                    f" then globally, for {dispatch_arg} of type {type(dispatch_arg)}")
+        fail_msg = (
+            f"Failed to find dispatch by value or by type, at first for scope {scope},"
+            f" then globally, for {dispatch_arg} of type {type(dispatch_arg)}"
+        )
 
         # Try in this scope.
         by_value, _ = _create_get__dispatch_scope(scope)

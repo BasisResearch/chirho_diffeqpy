@@ -1,27 +1,29 @@
-from functools import singledispatch
+import torch
+from chirho.dynamical.handlers.solver import Solver, TorchDiffEq
+
 from .fixtures import (
+    MockClosureDynamicsDirectPass,
     MockClosureUnifiedFixtureDynamics,
+    MockClosureUnifiedFixtureDynamicsReparam,
     build_state_reached_pure_event_fn,
-    MockClosureDynamicsDirectPass
 )
-from .fixtures_imported_from_chirho import (
+from .fixtures_imported_from_chirho import (  # noqa: F401
+    RandBetaUnifiedFixtureDynamics,
     SIRObservationMixin,
     SIRReparamObservationMixin,
     UnifiedFixtureDynamics,
-    bayes_sir_model,
-    sir_param_prior,
     UnifiedFixtureDynamicsReparam,
-    RandBetaUnifiedFixtureDynamics,
+    bayes_sir_model,
     build_event_fn_zero_after_tt,
     get_state_reached_event_f,
-    model_with_param_in_state
+    model_with_param_in_state,
+    sir_param_prior,
 )
-from chirho.dynamical.handlers.solver import Solver
-from .reparametrization import reparametrize_argument_by_value, reparametrize_argument_by_type
-from chirho.dynamical.handlers.solver import TorchDiffEq
-from .mock_closure import  DiffEqPyMockClosureCapable
-import torch
-import numpy as np
+from .mock_closure import DiffEqPyMockClosureCapable
+from .reparametrization import (
+    reparametrize_argument_by_type,
+    reparametrize_argument_by_value,
+)
 
 
 # <Solver>
@@ -37,6 +39,8 @@ def _(*args, **kwargs):
 def _(*args, **kwargs):
     # ...still return an instance. See DiffEqPyMockClosureCapable.__call__ for the rationale.
     return DiffEqPyMockClosureCapable()
+
+
 # </Solver>
 
 
@@ -46,8 +50,7 @@ def _(*args, **kwargs):
 def generate_diffeqpy_bayes_sir_model(dispatch_arg, *args, **kwargs):
     # ...return instance of a MockDynamicsUnifiedFixtureDynamics with the same parameter tensors.
     return MockClosureUnifiedFixtureDynamics(
-        beta=dispatch_arg.beta,
-        gamma=dispatch_arg.gamma
+        beta=dispatch_arg.beta, gamma=dispatch_arg.gamma
     )
 
 
@@ -62,9 +65,12 @@ def _(dispatch_arg, *args, **kwargs):
 @reparametrize_argument_by_value.register(RandBetaUnifiedFixtureDynamics)
 def _(dispatch_arg, *args, **kwargs):
     assert dispatch_arg is RandBetaUnifiedFixtureDynamics
+
     # ...return a class that overrides its forward (by preceding in MRO) but allows it to specify
     #  its special getter for the beta parameter.
-    class MockClosureRandBetaUnifiedFixtureDynamics(MockClosureUnifiedFixtureDynamics, RandBetaUnifiedFixtureDynamics):
+    class MockClosureRandBetaUnifiedFixtureDynamics(
+        MockClosureUnifiedFixtureDynamics, RandBetaUnifiedFixtureDynamics
+    ):
         pass
 
     return MockClosureRandBetaUnifiedFixtureDynamics
@@ -73,19 +79,32 @@ def _(dispatch_arg, *args, **kwargs):
 @reparametrize_argument_by_value.register(model_with_param_in_state)
 def _(*args, **kwargs):
 
-    # The same as the original chirho fixture but with scalars (not torch tensors) as constants.
+    # Annoyingly, dX has to be a symbolic function of state, so for constants we have to do hacky stuff.
+    # Multiplying or dividing by the state itself preserves shape information.
     def model_with_param_in_state_np(X):
         dX = dict()
-        dX["x"] = np.array(1.0)
+        dX["x"] = (X["x"] + 1.0) / (X["x"] + 1.0)  # a constant, 1.
         dX["z"] = X["dz"]
-        dX["dz"] = np.array(0.0)  # also a constant, this gets set by interventions.
-        dX["param"] = np.array(0.0)  # this is a constant event function parameter, so no change.
+        dX["dz"] = X["dz"] * 0.0  # also a constant, this gets set by interventions.
+        dX["param"] = (
+            X["param"] * 0.0
+        )  # this is a constant event function parameter, so no change.
         return dX
 
     return MockClosureDynamicsDirectPass(
         dynamics=lambda state, atemp_params: model_with_param_in_state_np(state),
-        atemp_params=dict()
+        atemp_params=dict(),
     )
+
+
+# Given any instance of UnifiedFixtureDynamicsReparam
+@reparametrize_argument_by_type.register(UnifiedFixtureDynamicsReparam)
+def _(dispatch_arg, *args, **kwargs):
+    return MockClosureUnifiedFixtureDynamicsReparam(
+        beta=dispatch_arg.beta, gamma=dispatch_arg.gamma
+    )
+
+
 # </Dynamics>
 
 
@@ -109,5 +128,6 @@ def _(dispatch_arg, *args, **kwargs):
 def _(dispatch_arg, *args, **kwargs):
     assert dispatch_arg is get_state_reached_event_f
     return build_state_reached_pure_event_fn
+
 
 # </Event Functions>

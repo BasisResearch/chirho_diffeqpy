@@ -1,8 +1,12 @@
-from typing import Optional
-import numpy as np
 from functools import singledispatch
+from typing import Optional
+
+import numpy as np
 from chirho.indexed.ops import gather
-from juliacall import Main as jl
+
+from ...load_julia_env import load_julia_env
+
+jl = load_julia_env()
 
 # TODO refactor the comments here. This solves two problems:
 #  1) julia things have all dunders defined, which means that they isinstance every base class in python, even
@@ -24,8 +28,10 @@ class _DunderedJuliaThingWrapper:
 
     def __bool__(self):
         # FIXME 18d0j1h9
-        raise NotImplementedError("Operation __bool__ is not implemented for wrapped julia types being handled"
-                                  " by the julianumpy backend.")
+        raise NotImplementedError(
+            "Operation __bool__ is not implemented for wrapped julia types being handled"
+            " by the julianumpy backend."
+        )
 
     def __init__(self, julia_thing):
         self.julia_thing = julia_thing
@@ -35,48 +41,48 @@ class _DunderedJuliaThingWrapper:
 
         # Forward all the math related dunder methods to the underlying julia thing.
         dunders = [
-            '__abs__',
-            '__add__',
+            "__abs__",
+            "__add__",
             # FIXME 18d0j1h9 python sometimes expects not a JuliaThingWrapper from __bool__, what do e.g. julia
             #  symbolics expect?
             # '__bool__',
-            '__ceil__',
-            '__eq__',  # FIXME 18d0j1h9
-            '__float__',
-            '__floor__',
-            '__floordiv__',
-            '__ge__',  # FIXME 18d0j1h9
-            '__gt__',  # FIXME 18d0j1h9
-            '__invert__',
-            '__le__',  # FIXME 18d0j1h9
-            '__lshift__',
-            '__lt__',  # FIXME 18d0j1h9
-            '__mod__',
-            '__mul__',
-            '__ne__',
-            '__neg__',
-            '__or__',  # FIXME 18d0j1h9
-            '__pos__',
-            '__pow__',
-            '__radd__',
-            '__rand__',  # FIXME 18d0j1h9 (also, where is __and__?)
-            '__reversed__',
-            '__rfloordiv__',
-            '__rlshift__',
-            '__rmod__',
-            '__rmul__',
-            '__ror__',
-            '__round__',
-            '__rpow__',
-            '__rrshift__',
-            '__rshift__',
-            '__rsub__',
-            '__rtruediv__',
-            '__rxor__',
-            '__sub__',
-            '__truediv__',
-            '__trunc__',
-            '__xor__',  # FIXME 18d0j1h9
+            "__ceil__",
+            "__eq__",  # FIXME 18d0j1h9
+            "__float__",
+            "__floor__",
+            "__floordiv__",
+            "__ge__",  # FIXME 18d0j1h9
+            "__gt__",  # FIXME 18d0j1h9
+            "__invert__",
+            "__le__",  # FIXME 18d0j1h9
+            "__lshift__",
+            "__lt__",  # FIXME 18d0j1h9
+            "__mod__",
+            "__mul__",
+            "__ne__",
+            "__neg__",
+            "__or__",  # FIXME 18d0j1h9
+            "__pos__",
+            "__pow__",
+            "__radd__",
+            "__rand__",  # FIXME 18d0j1h9 (also, where is __and__?)
+            "__reversed__",
+            "__rfloordiv__",
+            "__rlshift__",
+            "__rmod__",
+            "__rmul__",
+            "__ror__",
+            "__round__",
+            "__rpow__",
+            "__rrshift__",
+            "__rshift__",
+            "__rsub__",
+            "__rtruediv__",
+            "__rxor__",
+            "__sub__",
+            "__truediv__",
+            "__trunc__",
+            "__xor__",  # FIXME 18d0j1h9
         ]
 
         for method_name in dunders:
@@ -99,11 +105,15 @@ class _DunderedJuliaThingWrapper:
                 result = method()
 
                 if result is NotImplemented:
-                    raise NotImplementedError(f"Operation {method_name} is not implemented for {self.julia_thing}.")
+                    raise NotImplementedError(
+                        f"Operation {method_name} is not implemented for {self.julia_thing}."
+                    )
             else:
                 if len(args) != 1:
-                    raise ValueError("Only one argument is supported for automated dunder method dispatch.")
-                other, = args
+                    raise ValueError(
+                        "Only one argument is supported for automated dunder method dispatch."
+                    )
+                (other,) = args
 
                 if isinstance(other, np.ndarray):
                     if other.ndim == 0:
@@ -126,8 +136,10 @@ class _DunderedJuliaThingWrapper:
                 result = method(other)
 
                 if result is NotImplemented:
-                    raise NotImplementedError(f"Operation {method_name} is not implemented for"
-                                              f" {self.julia_thing} and {other}.")
+                    raise NotImplementedError(
+                        f"Operation {method_name} is not implemented for"
+                        f" {self.julia_thing} and {other}."
+                    )
 
             # Rewrap the return.
             return JuliaThingWrapper(result)
@@ -174,11 +186,13 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         return regular_array.view(_JuliaThingWrapperArray)
 
     @staticmethod
-    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype: Optional = None):
+    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None, out_dtype=None):
 
         if out is not None and out_dtype is not None:
-            raise ValueError("Only one of out and out_dtype can be specified. If you pass an out array, the dtype"
-                             " of the unwrapped array will be inferred from the dtype of the out array.")
+            raise ValueError(
+                "Only one of out and out_dtype can be specified. If you pass an out array, the dtype"
+                " of the unwrapped array will be inferred from the dtype of the out array."
+            )
 
         if out is None and out_dtype is None:
             raise ValueError("Either out or out_dtype must be specified.")

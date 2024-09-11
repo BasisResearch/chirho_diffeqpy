@@ -1,29 +1,38 @@
 import functools
-from typing import Callable, List, Optional, Tuple, Mapping, TypeVar
-
-import pyro
-import torch
-from diffeqpy import de
-
-from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
-from chirho.dynamical.internals.solver import Interruption, simulate_point
-from chirho.dynamical.handlers.interruption import StaticEvent, ZeroEvent
-from chirho.dynamical.ops import State
-from chirho.indexed.ops import IndexSet, gather, get_index_plates
-from torch import Tensor as Tnsr
-from juliatorch import JuliaFunction
-import juliacall
-import numpy as np
-from typing import Union
-from functools import singledispatch
-from chirho_diffeqpy.lang_interop import callable_from_julia
-from juliacall import Main as jl
 import numbers
 from copy import copy
-from chirho.indexed.ops import indices_of, gather
-from chirho.indexed.internals import index_select_from_array_like, _gather_tensor
-from chirho_diffeqpy.lang_interop.ops import convert_julia_to_python, convert_python_to_julia
+from functools import singledispatch
 from math import prod
+from typing import (
+    Callable,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
+
+import juliacall
+import numpy as np
+import pyro
+import torch
+from chirho.dynamical.handlers.interruption import StaticEvent, ZeroEvent
+from chirho.dynamical.internals._utils import _var_order
+from chirho.dynamical.internals.solver import Interruption, simulate_point
+from chirho.dynamical.ops import State
+from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
+from diffeqpy import de
+from juliatorch import JuliaFunction
+from torch import Tensor as Tnsr
+
+from chirho_diffeqpy.lang_interop import callable_from_julia
+
+from .load_julia_env import load_julia_env
+
+jl = load_julia_env()
 
 jl.seval("using Symbolics")
 
@@ -69,12 +78,8 @@ def _(v: np.ndarray):
 
 
 def pre_broadcast_initial_state(
-        f: Callable,
-        initial_state: Mapping[str, T],
-        *args,
-        **kwargs
-) -> Mapping[str, T]:
-
+    f: Callable, initial_state: State[torch.Tensor], *args, **kwargs
+) -> State[torch.Tensor]:
     assert len(initial_state.keys()), "Initial state must have at least one key."
 
     # Convert to numpy arrays.
@@ -91,31 +96,36 @@ def pre_broadcast_initial_state(
             broadcasted_initial_state_np["t"] = 1.0
         output = f(broadcasted_initial_state_np, *args_np, **kwargs_np)
         outputs.append(output)  # for check below
-        broadcasted_initial_state = {k: initial_state[k] + torch.zeros(output[k].shape)
-                                     for k, v in initial_state.items()}
+        broadcasted_initial_state = {
+            k: initial_state[k] + torch.zeros(output[k].shape)
+            for k, v in initial_state.items()
+        }
 
     # TODO only run this in check_dynamics?
     # <Check Pre-Broadcast>
     broadcasted_initial_state_np = to_numpy(broadcasted_initial_state)
     if "t" not in broadcasted_initial_state_np:
         broadcasted_initial_state_np["t"] = 1.0
-    output_w_prebroadcast = f(
-        broadcasted_initial_state_np,
-        *args_np,
-        **kwargs_np
-    )
+    output_w_prebroadcast = f(broadcasted_initial_state_np, *args_np, **kwargs_np)
     # Require that the pre-broadcasted output is identical to all iterations of outputs, e.g. with the original
     #  initial state.
     for output in outputs:
         for k, v in output.items():
-            assert np.allclose(v, output_w_prebroadcast[k]), \
-                "pre_broadcast of initial_state resulted in different output!"
+            assert np.allclose(
+                v, output_w_prebroadcast[k]
+            ), "pre_broadcast of initial_state resulted in different output!"
     # Also require that the output_w_prebroadcast has the same shape as the broadcasted_initial_state. This tells us
     #  that we have fully pre-broadcasted the initial state (and didn't need any extra iterations, i.e. we converged).
-    check_broadcasted_initial_state = {k: initial_state[k] + torch.zeros(output_w_prebroadcast[k].shape)
-                                       for k, v in initial_state.items()}
-    for (_, v1), (_, v2) in zip(broadcasted_initial_state.items(), check_broadcasted_initial_state.items()):
-        assert v1.shape == v2.shape, "pre_broadcast of initial_state failed to converge!"
+    check_broadcasted_initial_state = {
+        k: initial_state[k] + torch.zeros(output_w_prebroadcast[k].shape)
+        for k, v in initial_state.items()
+    }
+    for (_, v1), (_, v2) in zip(
+        broadcasted_initial_state.items(), check_broadcasted_initial_state.items()
+    ):
+        assert (
+            v1.shape == v2.shape
+        ), "pre_broadcast of initial_state failed to converge!"
     # </Check Pre-Broadcast>
 
     return broadcasted_initial_state
@@ -128,34 +138,39 @@ def diffeqdotjl_compile_problem(
     end_time: Tnsr,
     atemp_params: ATempParams[Tnsr],
 ) -> de.ODEProblem:
-
     # TODO take general compilation kwargs here too.
 
     require_float64(initial_state)
     require_float64(atemp_params)
     require_float64(dict(start_time=start_time, end_time=end_time))
 
-    # See the note below for why this must be a pure function and cannot use the values in initial_atemp_params directly.
-    # callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the preallocated
-    #  output array as the first argument (as opposed to listing out as a keyword, which is the default expectation).
+    # See the note below for why this must be a pure function and cannot use the values in initial_atemp_params
+    # directly. callable_from_julia(out_as_first_arg) just specifies that it expects julia to call it with the
+    #  preallocated output array as the first argument (as opposed to listing out as a keyword, which is the
+    #  default expectation).
     # diffeqpy, when compiling the dynamics function, passes the output array as the first argument.
     @callable_from_julia(out_as_first_arg=True)
     def ode_f(flat_state, flat_inner_atemp_params, t):
         # Unflatten the state u according to the state variables stored in initial dstate.
         state: State = _unflatten_mapping(
-            flattened_mapping=flat_state,
-            shaped_mapping_for_reference=initial_state
+            flattened_mapping=flat_state, shaped_mapping_for_reference=initial_state
         )
 
         # Note that initial_atemp_params will be a dictionary of shaped torch tensors, while flat_atemp_params will be
         # a vector of julia symbolics involved in jit copmilation.
-        inner_atemp_params: ATempParams = _unflatten_mapping(
-            flattened_mapping=flat_inner_atemp_params,
-            shaped_mapping_for_reference=atemp_params
-        ) if len(flat_inner_atemp_params) > 0 else dict()
+        inner_atemp_params: ATempParams = (
+            _unflatten_mapping(
+                flattened_mapping=flat_inner_atemp_params,
+                shaped_mapping_for_reference=atemp_params,
+            )
+            if len(flat_inner_atemp_params) > 0
+            else dict()
+        )
 
         if "t" in state:
-            raise ValueError("Cannot have a state variable named 't' as it is reserved for the time variable.")
+            raise ValueError(
+                "Cannot have a state variable named 't' as it is reserved for the time variable."
+            )
         state = dict(**state, t=t)
 
         dstate: State = dynamics(state, inner_atemp_params)
@@ -180,7 +195,11 @@ def diffeqdotjl_compile_problem(
         flat_initial_state.detach().numpy(),
         torch.cat((start_time[None], end_time[None])).detach().numpy(),
         # HACK sgfeh2 stuff breaks with a len zero array, and passing nothing or None incurs the same problem.
-        flat_atemp_params.detach().numpy() if len(flat_atemp_params) else np.ones((1,), dtype=np.float64),
+        (
+            flat_atemp_params.detach().numpy()
+            if len(flat_atemp_params)
+            else np.ones((1,), dtype=np.float64)
+        ),
     )
 
     fast_prob = de.jit(prob)
@@ -204,14 +223,14 @@ def _lazily_compile_problem(
 # TODO g179du91
 @pyro.poutine.runtime.effectful(type="_lazily_compile_event_fn_callback")
 def _lazily_compile_event_fn_callback(
-        interruption: Interruption,
-        initial_state: State[Tnsr],
-        atemp_params: ATempParams[Tnsr]
-) -> de.VectorContinuousCallback:
+    interruption: Interruption,
+    initial_state: State[Tnsr],
+    atemp_params: ATempParams[Tnsr],
+) -> Tuple[Callable, int]:
     raise NotImplementedError()
 
 
-def get_var_order(mapping: Mapping[str, Tnsr]) -> Tuple[str, ...]:
+def get_var_order(mapping: Mapping[str, Union[Tnsr, np.ndarray]]) -> Tuple[str, ...]:
     return _var_order(frozenset(mapping.keys()))
 
 
@@ -237,7 +256,9 @@ def flat_cat_numpy(*vs: np.ndarray):
 
 
 # TODO ofwr1948 replace with generic pytree flatten/unflatten?
-def _flatten_mapping(mapping: Mapping[str, Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
+def _flatten_mapping(
+    mapping,  #: Mapping[str, Union[Tnsr, np.ndarray]]  # TODO do17bdy1t
+):  # -> Union[Tnsr, np.ndarray]:  # TODO do17bdy1t
     if len(mapping) == 0:
         # TODO do17bdy1t address type specificity
         return torch.tensor([], dtype=torch.float64)
@@ -247,11 +268,10 @@ def _flatten_mapping(mapping: Mapping[str, Union[Tnsr, np.ndarray]]) -> Union[Tn
 
 # TODO ofwr1948 replace with generic pytree flatten/unflatten?
 def _unflatten_mapping(
-        flattened_mapping: Tnsr,
-        shaped_mapping_for_reference: Mapping[str, Union[Tnsr, juliacall.VectorValue]],
-        traj_length: Optional[int] = None
+    flattened_mapping: Tnsr,
+    shaped_mapping_for_reference: Mapping[str, Union[Tnsr, juliacall.VectorValue]],
+    traj_length: Optional[int] = None,
 ) -> Mapping[str, Union[Tnsr, np.ndarray]]:
-
     var_order = get_var_order(shaped_mapping_for_reference)
     mapping_to_return = dict()
     for v in var_order:
@@ -262,12 +282,12 @@ def _unflatten_mapping(
             #  and because we know the rest of the shape we can auto-detect its size with -1.
             shape += (traj_length,)
 
-        sv = flattened_mapping[:prod(shape)].reshape(shape)
+        sv = flattened_mapping[: prod(shape)].reshape(shape)
 
         mapping_to_return[v] = sv
 
         # Slice so that only the remaining elements are left.
-        flattened_mapping = flattened_mapping[prod(shape):]
+        flattened_mapping = flattened_mapping[prod(shape) :]
 
     return mapping_to_return
 
@@ -277,7 +297,9 @@ def require_float64(mapping: Mapping[str, Tnsr]):
     # Forward diff through diffeqpy currently requires float64. # TODO do17bdy1t update when this is fixed.
     for k, v in mapping.items():
         if v.dtype is not torch.float64:
-            raise ValueError(f"State or parameter variable {k} has dtype {v.dtype}, but must be float64.")
+            raise ValueError(
+                f"State or parameter variable {k} has dtype {v.dtype}, but must be float64."
+            )
 
 
 def _diffeqdotjl_ode_simulate_inner(
@@ -286,15 +308,16 @@ def _diffeqdotjl_ode_simulate_inner(
     timespan: Tnsr,
     atemp_params: ATempParams[Tnsr],
     _diffeqdotjl_callback: Optional[de.CallbackSet] = None,
-    **kwargs
+    **kwargs,
 ) -> Tuple[State[torch.Tensor], State[torch.Tensor], torch.Tensor]:
-
     # if not torch.all(timespan[:-1] < timespan[1:]):
     #     raise ValueError("The requested times must be sorted and strictly increasing.")
 
     if not isinstance(atemp_params, dict):
-        raise ValueError(f"atemp_params must be a dictionary, "
-                         f"but got type {type(atemp_params)} and value {atemp_params}")
+        raise ValueError(
+            f"atemp_params must be a dictionary, "
+            f"but got type {type(atemp_params)} and value {atemp_params}"
+        )
 
     require_float64(initial_state)
     require_float64(atemp_params)
@@ -319,21 +342,38 @@ def _diffeqdotjl_ode_simulate_inner(
     flat_initial_state = _flatten_mapping(initial_state)
     flat_atemp_params = _flatten_mapping(atemp_params)
     # HACK sgfeh2 stuff breaks with a len zero array, and passing nothing or None incurs the same problem.
-    flat_atemp_params = torch.ones((1,), dtype=torch.float64) if len(flat_atemp_params) == 0 else flat_atemp_params
+    flat_atemp_params = (
+        torch.ones((1,), dtype=torch.float64)
+        if len(flat_atemp_params) == 0
+        else flat_atemp_params
+    )
     outer_u0_t_p = torch.cat([flat_initial_state, timespan, flat_atemp_params])
 
     # This has to take a concatenated vector because of juliacall's one input/one output limitations.
     def inner_solve(u0_t_p):
 
         # Unpack the concatenated initial state, timespan, and parameters.
-        u0 = u0_t_p[:flat_initial_state.numel()]
-        tspan = u0_t_p[flat_initial_state.numel():-flat_atemp_params.numel()]
-        p = u0_t_p[-flat_atemp_params.numel():]
+        u0 = u0_t_p[: flat_initial_state.numel()]
+        tspan = u0_t_p[flat_initial_state.numel() : -flat_atemp_params.numel()]
+        p = u0_t_p[-flat_atemp_params.numel() :]
 
         # Remake the otherwise-immutable problem to use the new parameters.
-        remade_compiled_prob = de.remake(compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1]))
+        remade_compiled_prob = de.remake(
+            compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1])
+        )
 
-        sol = de.solve(remade_compiled_prob, callback=_diffeqdotjl_callback, **kwargs)
+        kwargs_copy = copy(kwargs)
+        alg = kwargs_copy.pop("alg", None)
+
+        # Passing saveat means we won't save dense higher order interpolants. This saves on memory, and still lets us
+        #  evaluate at the requested times later, as if interpolating.
+        sol = de.solve(
+            remade_compiled_prob,
+            alg,
+            callback=_diffeqdotjl_callback,
+            saveat=tspan,
+            **kwargs_copy,
+        )
 
         # Get the end time of the trajectory. Note that this may precede elements in the tspan if the solver
         #  was terminated by a dynamic event.
@@ -364,7 +404,9 @@ def _diffeqdotjl_ode_simulate_inner(
         # julia uses column major ordering, but we'll be unflattening assuming row major, so invert the axes before
         #  flattening.
         jl.seval("row_major_perm = reverse(1:ndims(inner_flat_traj))")
-        jl.seval("inner_flat_flat_traj = vec(permutedims(inner_flat_traj, row_major_perm))")
+        jl.seval(
+            "inner_flat_flat_traj = vec(permutedims(inner_flat_traj, row_major_perm))"
+        )
         jl.seval("out_jl = vcat(inner_flat_flat_traj, inner_end_t)")
 
         return jl.out_jl
@@ -380,7 +422,8 @@ def _diffeqdotjl_ode_simulate_inner(
     traj = _unflatten_mapping(
         flattened_mapping=flat_traj,
         shaped_mapping_for_reference=initial_state,
-        traj_length=len(timespan) + 1  # because augmented the timespan with the end state.
+        traj_length=len(timespan)
+        + 1,  # because augmented the timespan with the end state.
     )
 
     requested_traj = {k: v[..., :-1] for k, v in traj.items()}
@@ -396,7 +439,9 @@ def _diffeqdotjl_ode_simulate_inner(
     #  1) find the timespan elements that are less than or equal to the interruption time (end_t)
     #  2) return the requested_traj after masking out those states logged after end_t.
     pre_event_mask = timespan < end_t
-    pre_event_requested_traj = {k: v[..., pre_event_mask] for k, v in requested_traj.items()}
+    pre_event_requested_traj = {
+        k: v[..., pre_event_mask] for k, v in requested_traj.items()
+    }
 
     return pre_event_requested_traj, final_state, end_t
 
@@ -407,7 +452,9 @@ def diffeqdotjl_simulate_trajectory(
     timespan: Tnsr,
     **kwargs,
 ) -> State[Tnsr]:
-    requested_traj, final_State, end_t = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+    requested_traj, final_State, end_t = _diffeqdotjl_ode_simulate_inner(
+        dynamics, initial_state, timespan, **kwargs
+    )
     return requested_traj
 
 
@@ -420,20 +467,28 @@ def diffeqdotjl_simulate_to_interruption(
     atemp_params: ATempParams[Tnsr],
     **kwargs,
 ) -> Tuple[State[Tnsr], Tnsr, Optional[Interruption]]:
-
     # Static interruptions can be handled statically, so sort out dynamics from statics.
     dynamic_interruptions = [
-        interruption for interruption in interruptions
+        interruption
+        for interruption in interruptions
         if not isinstance(interruption.predicate, StaticEvent)
     ]
-    static_times = torch.stack([
-        interruption.predicate.time if isinstance(interruption.predicate, StaticEvent) else torch.tensor(torch.inf)
-        for interruption in interruptions
-    ])
+    static_times = torch.stack(
+        [
+            (
+                interruption.predicate.time
+                if isinstance(interruption.predicate, StaticEvent)
+                else torch.tensor(torch.inf)
+            )
+            for interruption in interruptions
+        ]
+    )
 
     static_time_min_idx = torch.argmin(static_times)
     static_end_time = static_times[static_time_min_idx]
-    assert torch.isfinite(static_end_time), "Internal error: static_end_time should be finite. Is end_time non-finite?"
+    assert torch.isfinite(
+        static_end_time
+    ), "Internal error: static_end_time should be finite. Is end_time non-finite?"
     static_end_interruption = interruptions[static_time_min_idx]
 
     if len(dynamic_interruptions) == 0:
@@ -443,15 +498,13 @@ def diffeqdotjl_simulate_to_interruption(
             start_time,
             static_end_time,
             atemp_params=atemp_params,
-            **kwargs
+            **kwargs,
         )
         return final_state, static_end_time, static_end_interruption
 
     initial_state = pre_broadcast_initial_state(dynamics, initial_state, atemp_params)
     cb = _diffeqdotjl_build_combined_event_f_callback(
-        dynamic_interruptions,
-        initial_state=initial_state,
-        atemp_params=atemp_params
+        dynamic_interruptions, initial_state=initial_state, atemp_params=atemp_params
     )
 
     # FIXME iwgar0kgs72 So the original backend implementation for TorchDiffEq assumes that neither simulate_point
@@ -469,13 +522,15 @@ def diffeqdotjl_simulate_to_interruption(
     #  themselves get lazily compiled wrt this pointer.
     _last_triggered_interruption_ptr[0] = None
 
-    requested_trajectory, final_state, interruption_time = _diffeqdotjl_ode_simulate_inner(
-        dynamics,
-        initial_state,
-        torch.stack((start_time, static_end_time)),
-        atemp_params=atemp_params,
-        _diffeqdotjl_callback=cb,
-        **kwargs
+    requested_trajectory, final_state, interruption_time = (
+        _diffeqdotjl_ode_simulate_inner(
+            dynamics,
+            initial_state,
+            torch.stack((start_time, static_end_time)),
+            atemp_params=atemp_params,
+            _diffeqdotjl_callback=cb,
+            **kwargs,
+        )
     )
 
     # If no dynamic intervention's affect! function fired, then the static interruption is responsible for
@@ -496,7 +551,7 @@ def diffeqdotjl_simulate_to_interruption(
         interruption_time,
         atemp_params=atemp_params,
         # _diffeqdotjl_callback=cb,  # FIXME iwgar0kgs72 ignoring dynamic interruption callbacks here.
-        **kwargs
+        **kwargs,
     )
 
     return final_state, interruption_time, triggering_interruption
@@ -507,10 +562,9 @@ def diffeqdotjl_simulate_point(
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
-    atemp_params: ATempParams[T],
+    atemp_params: ATempParams[torch.Tensor],
     **kwargs,
 ) -> State[torch.Tensor]:
-
     timespan = torch.stack((start_time, end_time))
     requested_trajectory, final_state, end_t = _diffeqdotjl_ode_simulate_inner(
         dynamics, initial_state, timespan, atemp_params=atemp_params, **kwargs
@@ -545,21 +599,24 @@ def _(x: float):
 
 
 def diffeqdotjl_compile_event_fn_callback(
-        interruption: Interruption,
-        initial_state: State[Tnsr],
-        atemp_params: ATempParams[Tnsr]
-) -> de.VectorContinuousCallback:
-
+    interruption: Interruption,
+    initial_state: State[Tnsr],
+    atemp_params: ATempParams[Tnsr],
+) -> Tuple[Callable, int]:
     if not isinstance(interruption.predicate, ZeroEvent):
-        raise ValueError("event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
-                         " Only ZeroEvents can currently be compiled.")
+        raise ValueError(
+            "event_fn compilation received interruption with unexpected predicate (not a ZeroEvent)."
+            " Only ZeroEvents can currently be compiled."
+        )
 
     if isinstance(interruption.predicate, StaticEvent):
         # The torchdiffeq backend only supports dynamic xor static termination, but diffeqpy supports dynamic
         #  termination with a static end time specified, so we don't need to treat static events dynamically.
-        raise ValueError("event_fn compilation for the DiffEqPy backend should not have to be applied to StaticEvents,"
-                         " as those events can be handled statically by specifying an end_time, alongside any"
-                         " relevant dynamic events passed in a callback set.")
+        raise ValueError(
+            "event_fn compilation for the DiffEqPy backend should not have to be applied to StaticEvents,"
+            " as those events can be handled statically by specifying an end_time, alongside any"
+            " relevant dynamic events passed in a callback set."
+        )
 
     event_fn: PureEventFn = interruption.predicate.event_fn
 
@@ -568,8 +625,11 @@ def diffeqdotjl_compile_event_fn_callback(
         ret1 = event_fn(0.0, to_numpy(initial_state), to_numpy(atemp_params))
     except TypeError as e:
         if "takes 2 positional arguments but 3 were given" in str(e):
-            raise ValueError(f"event_fn for use with the DiffEqPy backend must take both state and parameters as"
-                             f" arguments.")
+            raise ValueError(
+                "event_fn for use with the DiffEqPy backend must take both state and parameters as"
+                " arguments. All told, it should acccept three arguments: time, state, and parameters."
+            )
+        raise
     numel_out = numel(ret1)
 
     # Define the inner bit of the condition function that we're going to compile.
@@ -577,13 +637,11 @@ def diffeqdotjl_compile_event_fn_callback(
     def inner_condition_(u, t, p):
 
         state = _unflatten_mapping(
-            flattened_mapping=u,
-            shaped_mapping_for_reference=initial_state
+            flattened_mapping=u, shaped_mapping_for_reference=initial_state
         )
 
         params = _unflatten_mapping(
-            flattened_mapping=p,
-            shaped_mapping_for_reference=atemp_params
+            flattened_mapping=p, shaped_mapping_for_reference=atemp_params
         )
 
         ret = event_fn(t, state, params)
@@ -597,9 +655,11 @@ def diffeqdotjl_compile_event_fn_callback(
     # Define symbolic inputs to inner_condition_. The JuliaThingWrapper machinery doesn't support
     #  symbolic arrays though because indexing operations are difficult to forward. So these need to be non-symbolic
     #  vectors of symbols. This is achieved via "scalarize".
-    jl.seval(f"@variables uvec[1:{len(flat_initial_state)}], t, pvec[1:{len(flat_atemp_params)}]")
-    jl.seval(f"u = Symbolics.scalarize(uvec)")
-    jl.seval(f"p = Symbolics.scalarize(pvec)")
+    jl.seval(
+        f"@variables uvec[1:{len(flat_initial_state)}], t, pvec[1:{len(flat_atemp_params)}]"
+    )
+    jl.seval("u = Symbolics.scalarize(uvec)")
+    jl.seval("p = Symbolics.scalarize(pvec)")
     # Make just a generic empty output vector of type Num with length numel_out.
     jl.seval(f"out = [Num(0) for _ in 1:{numel_out}]")
 
@@ -612,6 +672,7 @@ def diffeqdotjl_compile_event_fn_callback(
     # TODO HACK figure out a less janky namespace solution. maybe just write this compilation in julia and call
     #  it here.
     import uuid
+
     affect_uuid = uuid.uuid4().hex
 
     # Evaluate it to turn it into a julia function.
@@ -622,28 +683,15 @@ def diffeqdotjl_compile_event_fn_callback(
 
     # inner_condition can now be called from a condition function with signature
     #  expected by the callbacks.
-    jl.seval(f"""
+    jl.seval(
+        f"""
     function condition_{affect_uuid}(out, u, t, integrator)
         inner_condition_{affect_uuid}(out, u, t, integrator.p)
     end
-    """)
-
-    # The "affect" function is only called a single time, so we can just use python. This
-    #  function also tracks which interruption triggered the termination.
-    def affect_b(integrator, *_):
-        # TODO HACK 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
-        #  to directly track which interruption was responsible for termination is a lot cleaner than running
-        #  the event_fns after the fact to figure out which one was responsible.
-        _last_triggered_interruption_ptr[0] = interruption
-        de.terminate_b(integrator)
-
-    # Return the callback involving only juila functions.
-    return de.VectorContinuousCallback(
-        # jl.condition_,
-        getattr(jl, f"condition_{affect_uuid}"),
-        affect_b,
-        numel_out
+    """
     )
+
+    return getattr(jl, f"condition_{affect_uuid}"), numel_out
 
 
 # TODO HACK 18wfghjfs541
@@ -651,20 +699,35 @@ def diffeqdotjl_compile_event_fn_callback(
 _last_triggered_interruption_ptr = [None]  # type: List[Optional[Interruption]]
 
 
-def _diffeqdotjl_build_combined_event_f_callback(
-        interruptions: List[Interruption],
-        initial_state: State[Tnsr],
-        atemp_params: ATempParams[Tnsr],
-) -> de.CallbackSet:
+def make_affect_b(interruption):
 
+    def affect_b(integrator, *_):
+        # TODO HACK 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
+        #  to directly track which interruption was responsible for termination is a lot cleaner than running
+        #  the event_fns after the fact to figure out which one was responsible.
+        _last_triggered_interruption_ptr[0] = interruption
+        de.terminate_b(integrator)
+
+    return affect_b
+
+
+def _diffeqdotjl_build_combined_event_f_callback(
+    interruptions: List[Interruption],
+    initial_state: State[Tnsr],
+    atemp_params: ATempParams[Tnsr],
+) -> de.CallbackSet:
     cbs = []
 
     for i, interruption in enumerate(interruptions):
-        vc_cb = _lazily_compile_event_fn_callback(
-            interruption,
-            initial_state,
-            atemp_params
-        )  # type: de.VectorContinuousCallback
+        compiled_condition, numel_out = _lazily_compile_event_fn_callback(
+            interruption, initial_state, atemp_params
+        )
+
+        vc_cb = de.VectorContinuousCallback(
+            compiled_condition,
+            make_affect_b(interruption),
+            numel_out,
+        )
 
         cbs.append(vc_cb)
 
@@ -672,21 +735,93 @@ def _diffeqdotjl_build_combined_event_f_callback(
 
 
 @indices_of.register
-def _indices_of_tensor(value: np.ndarray, **kwargs) -> IndexSet:
+def _indices_of_ndarray(value: np.ndarray, **kwargs) -> IndexSet:
     return indices_of(value.shape, **kwargs)
 
 
-@index_select_from_array_like.register
-def _index_select_from_array_like_npndarray(arr: np.ndarray, dim: int, indices: List[int]) -> np.ndarray:
+def _index_select_from_ndarray(
+    arr: np.ndarray, dim: int, indices: List[int]
+) -> np.ndarray:
     return np.take(arr, indices=np.array(indices), axis=dim)
 
 
+# Note dg1ofo9: This implementation is identical to the torch tensor implementation, except that it uses
+#  _index_select_from_ndarray above.
 @gather.register
-def _gather_npndarray(
+def _gather_ndarray(
     value: np.ndarray,
-    *args,
+    indexset: IndexSet,
+    *,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
     **kwargs,
 ) -> np.ndarray:
-    # Can use the same implementation actually, as _gather_tensor works for any array likes that have an
-    #  index_select_from_array_like implementation (see above).
-    return _gather_tensor(value, *args, **kwargs)
+    if event_dim is None:
+        event_dim = 0
+    if name_to_dim is None:
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+    result = value
+    for name, indices in indexset.items():
+        if name not in name_to_dim:
+            continue
+        dim = name_to_dim[name] - event_dim
+        if len(result.shape) < -dim or result.shape[dim] == 1:
+            continue
+        result = _index_select_from_ndarray(
+            result, name_to_dim[name] - event_dim, list(sorted(indices))
+        )
+        # See above for note dg1ofo9
+        # result = result.index_select(
+        #     name_to_dim[name] - event_dim,
+        #     torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
+        # )
+    return result
+
+
+class DiffEqPyRuntimeCheck(pyro.poutine.messenger.Messenger):
+    def _pyro_sample(self, msg):
+        raise ValueError(
+            "The chirho DiffEqPy backend currently only supports ODE models and not SDE models,"
+            " and thus does not allow `pyro.sample` calls within the dynamics."
+        )
+
+
+def diffeqpy_check_dynamics(
+    dynamics: PureDynamics[np.ndarray],
+    initial_state: State[torch.Tensor],
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
+    atemp_params: ATempParams[torch.Tensor],
+) -> None:
+    # Pre-broadcast (this also checks that the prebroadcast reaches a shape fixed point).
+    expanded_initial_state = pre_broadcast_initial_state(
+        dynamics, initial_state, atemp_params
+    )
+
+    expanded_initial_state_np = to_numpy(expanded_initial_state)
+    atemp_params_np = to_numpy(atemp_params)
+
+    with DiffEqPyRuntimeCheck():
+        dt_np = dynamics(expanded_initial_state_np, atemp_params_np)
+
+    if not isinstance(dt_np, dict):
+        raise ValueError("Dynamics function must return a dictionary of dstates.")
+
+    if dt_np.keys() != expanded_initial_state_np.keys():
+        raise ValueError(
+            f"Time derivative for state variables {dt_np.keys()} does not match the state variables "
+            f"{expanded_initial_state_np.keys()}."
+        )
+
+    for k, v in dt_np.items():
+        if v.shape != expanded_initial_state_np[k].shape:
+            raise ValueError(
+                f"Time derivative for state variable {k} has shape {v.shape}, but expected it be the same "
+                f" shape as the state {expanded_initial_state_np[k].shape}."
+            )
+
+        if isinstance(v, torch.Tensor):
+            raise NotImplementedError(
+                f"Time derivative for state variable {k} is a torch tensor, but currently dynamics"
+                " must be defined to operate on and return numpy arrays."
+            )

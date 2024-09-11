@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Dict
+from typing import Callable, Dict, Optional
 
 
 # Make a publically accessible valuedispatch decorator that returns a _ValueDispatcher with the original
@@ -20,7 +20,14 @@ class _SingleDispatcherOnValue:
         self.registry: Dict[object, Callable] = dict()
         self.default_func = default_func
 
-    def __call__(self, value: object, *args, testid: Optional[str] = None, argnames: Optional[str] = None, **kwargs):
+    def __call__(
+        self,
+        value: object,
+        *args,
+        testid: Optional[str] = None,
+        argnames: Optional[str] = None,
+        **kwargs,
+    ):
         try:
             func = self.registry.get(value, None)
         except TypeError as e:
@@ -41,9 +48,11 @@ class _SingleDispatcherOnValue:
                 self.registry[value] = func
             except TypeError as e:
                 if "unhashable type" in str(e):
-                    raise TypeError(f"Value {value} is not hashable, and cannot be used for singledispatch_on_value."
-                                    f" You can either use type dispatch, or use type dispatch on the unhashable form "
-                                    f" and convert to a hashable form, then dispatch by value on the hashable form.")
+                    raise TypeError(
+                        f"Value {value} is not hashable, and cannot be used for singledispatch_on_value."
+                        f" You can either use type dispatch, or use type dispatch on the unhashable form "
+                        f" and convert to a hashable form, then dispatch by value on the hashable form."
+                    )
             return func
 
         return decorator

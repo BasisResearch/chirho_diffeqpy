@@ -1,0 +1,65 @@
+name: Test
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ '3.11' ]
+        julia-version: [ '1.10' ]
+        os: [ ubuntu-latest, macos-latest ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Ubuntu Python cache
+        uses: actions/cache@v4
+        if: startsWith(matrix.os, 'ubuntu')
+        with:
+          path: ~/.cache/pip
+          key:
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}
+      - name: macOS Python cache
+        uses: actions/cache@v4
+        if: startsWith(matrix.os, 'macOS')
+        with:
+          path: ~/Library/Caches/pip
+          key:
+            ${{ matrix.os }}-${{ matrix.python-version }}-${{ hashFiles('docs/source/requirements.txt') }}-${{ hashFiles('setup.py') }}
+      # This uses the same path for ubuntu and macos, so we don't need an os-specific path here.
+      - name: Julia cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.julia
+          key:
+            ${{ matrix.os }}-${{ matrix.julia-version }}-${{ hashFiles('chirho_diffeqpy/load_julia_env.py') }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Set up Julia ${{ matrix.julia-version }}
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - name: Install pip
+        run: |
+          python -m pip install --upgrade pip
+      - name: Install chirho_diffeqpy
+        run: |
+          pip install .[test]
+      # <FIXME 6fjj1ydg>
+      # Manually install chirho as local source so tests are available
+      # Can remove after automating chirho source install under [test] extra.
+      - name: Install chirho from source
+        # TODO pull version from requirements.txt in the chirho clone.
+        run: |
+          cd ..
+          git clone https://github.com/BasisResearch/chirho.git; cd chirho; git reset --hard cda2f56; cd ..
+          pip install -e './chirho[dynamical,test]'
+          cd ./chirho_diffeqpy
+      # </FIXME 6fjj1ydg>
+      - name: Test with pytest
+        run: |
+          pytest -s tests/
