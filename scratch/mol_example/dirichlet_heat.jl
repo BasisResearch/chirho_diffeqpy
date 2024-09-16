@@ -4,12 +4,13 @@ u_exact = (x, t) -> exp.(-t) * cos.(x)
 
 # Parameters, variables, and derivatives
 @parameters t x
+@parameters Dn,
 @variables u(..)
 Dt = Differential(t)
 Dxx = Differential(x)^2
 
 # 1D PDE and boundary conditions
-eq = Dt(u(t, x)) ~ 0.05 * Dxx(u(t, x))
+eq = Dt(u(t, x)) ~ Dn * Dxx(u(t, x))
 bcs = [u(0, x) ~ cos(10. * x),
     u(t, 0) ~ 1.0, #  exp(-t),
     u(t, 1) ~ cos(10. * -1.), #exp(-t) * cos(1)]
@@ -20,7 +21,9 @@ domains = [t ∈ Interval(0.0, 1.0),
     x ∈ Interval(0.0, 1.0)]
 
 # PDE system
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+@named pdesys = PDESystem(
+    eq, bcs, domains, [t, x], [u(t, x)], [Dn => 0.1];
+)
 
 # Method of lines discretization
 dx = 0.01
