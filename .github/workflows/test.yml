@@ -56,7 +56,7 @@ jobs:
         # TODO pull version from requirements.txt in the chirho clone.
         run: |
           cd ..
-          git clone https://github.com/BasisResearch/chirho.git; cd chirho; git reset --hard cda2f56; cd ..
+          git clone https://github.com/BasisResearch/chirho.git; cd chirho; git reset --hard 0f5dae6; cd ..
           pip install -e './chirho[dynamical,test]'
           cd ./chirho_diffeqpy
       # </FIXME 6fjj1ydg>

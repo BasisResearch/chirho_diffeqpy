@@ -38,7 +38,7 @@ distribution before running the tests. To run tests locally:
 1. create a virtual environment
 2. clone this repo: `git clone https://github.com/BasisResearch/chirho_diffeqpy.git`
 3. install from source: `pip install -e './chirho_diffeqpy[test]'`
-4. clone chirho: `git clone https://github.com/BasisResearch/chirho.git; cd chirho; git reset --hard cda2f56; cd ..`
+4. clone chirho: `git clone https://github.com/BasisResearch/chirho.git; cd chirho; git reset --hard 0f5dae6; cd ..`
 5. install chirho from source: `pip install -e './chirho[dynamical,test]'`
 
 

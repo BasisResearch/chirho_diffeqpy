@@ -1,4 +1,4 @@
-# must precede all any torch import to prevent segfault
+# must precede any torch import to prevent segfault
 import juliacall  # noqa: F401
 import torch
 

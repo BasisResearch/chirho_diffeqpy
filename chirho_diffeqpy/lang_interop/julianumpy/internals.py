@@ -8,22 +8,28 @@ from ...load_julia_env import load_julia_env
 
 jl = load_julia_env()
 
-# TODO refactor the comments here. This solves two problems:
-#  1) julia things have all dunders defined, which means that they isinstance every base class in python, even
+# This backend solves two problems with juliacall's numpy integration:
+#  1) juliacall entities have all dunders defined, which means that they isinstance every base class in python, even
 #      though most of the time those dunders are not implemented. This is very confusing for python (and numpy)
-#      and eg causes numpy to iterate a julia scalar and get a >32 dim array.
+#      and eg causes numpy to iterate julia scalar types, and of course fail. Note that this only occurs with non
+#      primitive numeric types like symbolic or dual numbers.
 #  2) numpy ufuncs don't work on julia objects, so we need to forward those to their respective julia functions.
-#  The point here is to be able to write a numpy function, and then give that to julia to execute
-#   from within julia code.
-#  Then most all other shenanigans essentially ensures that everything stays properly wrapped (from numpy's perspective)
+
+#  The overall point here is to be able to write a numpy function, and then give that to julia to execute
+#   from within julia code, by passing in (potentially non-primitive) julia numeric types.
+
+#  The other complexity essentially ensures that everything stays properly wrapped (from numpy's perspective)
 #   the entire time it's all going through the numpy code.
 
 
 class _DunderedJuliaThingWrapper:
     """
-    Handles just the dunder forwarding to the undelrying julia thing. Beyond a separation of concerns, this is
+    Handles just the dunder forwarding to the underlying julia thing. Beyond a separation of concerns, this is
     a separate class because we need to be able to cast back into something that doesn't have custom __array_ufunc__
     behavior. See _default_ufunc below for more details on this nuance.
+
+    In short, this serves to hide defined but ultimately not implemented dunder methods from python, thereby
+    preventing failures of hasattr duck typing.
     """
 
     def __bool__(self):
@@ -164,7 +170,8 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
     Note that numpy arrays of objects will, internally, use the dunder math methods of the objects they contain when
     performing math operations. This is not fast, but for our purposes is fine b/c the main application here involves
     julia symbolics only during jit compilation. As such, the point of this class is to wrap scalar valued julia things
-    only so that we can use numpy arrays of julia things.
+    only so that we can use numpy arrays of julia things. As mentioned elsewhere, the downside here is slow compile
+    times for high dimensional functions with many operations.
 
     This class also handles the forwarding of numpy universal functions like sin, exp, log, etc. to the corresopnding
     julia version. See __array_ufunc__ for more details.
@@ -263,7 +270,10 @@ class _JuliaThingWrapperArray(np.ndarray):
         result = _JuliaThingWrapperArray(self.shape, dtype=object)
 
         for idx, v in np.ndenumerate(self):
-            assert isinstance(v, JuliaThingWrapper)  # TODO value error instead
+            if not isinstance(v, JuliaThingWrapper):
+                raise ValueError(
+                    "Only JuliaThingWrapper objects can be used in a JuliaThingWrapperArray."
+                )
             result[idx] = v._jl_ufunc(ufunc)
 
         return result
