@@ -5,7 +5,8 @@ from diffeqpy.__init__ import _ensure_julia_installed
 # A rehash of the load_julia_packages function in diffeqpy that takes versions.
 # Much is copied directly.
 def load_and_pin_julia_packages(**names_versions):
-    # This is terrifying to many people. However, it seems SciML takes pragmatic approach.
+    # To directly quote the diffeqpy code:
+    # "This is terrifying to many people. However, it seems SciML takes pragmatic approach."
     _ensure_julia_installed()
 
     names = tuple(names_versions.keys())
@@ -61,6 +62,8 @@ def load_julia_env():
         Symbolics=None,
         ForwardDiff=None,
         SymbolicUtils=None,
+        LinearSolve="2.22.1",
+        BandedMatrices="1.7.3"
     )
 
     return jl
