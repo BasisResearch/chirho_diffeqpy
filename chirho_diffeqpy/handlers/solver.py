@@ -8,7 +8,7 @@ from chirho.dynamical.internals.solver import Interruption, Solver, State  # noq
 from diffeqpy import de  # noqa: F401
 from torch import Tensor as Tnsr
 
-from .internals import (
+from ..internals import (
     ATempParams,
     MappingShape,
     PureDynamics,

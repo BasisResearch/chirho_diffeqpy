@@ -77,6 +77,7 @@ def _(v: np.ndarray):
     return v
 
 
+@singledispatch
 def pre_broadcast_initial_state(
     f: Callable, initial_state: State[torch.Tensor], *args, **kwargs
 ) -> State[torch.Tensor]:
