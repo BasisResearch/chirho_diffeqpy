@@ -1,0 +1,10 @@
+# FIXME chirho version is listed in three places:
+#  1. here in the requirements.txt
+#  2. in the main readme (in instructions for installing with ability to run tests)
+#  3. in the .github/workflows/test.yml file that basically implements the instructions in the readme
+# So change in all three for now. This will go away if we can automate the version-pinned test-capable installation
+#  in a way that pulls from this requirements.txt file.
+chirho[dynamical] @ git+https://github.com/BasisResearch/chirho.git@0f5dae6
+diffeqpy==2.4.1
+juliatorch @ git+https://github.com/SciML/juliatorch.git@5f79d3b
+deepdiff==7.0.1
