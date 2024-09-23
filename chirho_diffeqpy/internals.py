@@ -34,7 +34,7 @@ from .load_julia_env import load_julia_env
 
 jl = load_julia_env()
 
-jl.seval("using Symbolics")
+jl.seval("using .Symbolics")
 
 T = TypeVar("T")
 R = Union[numbers.Real, T]
@@ -75,6 +75,11 @@ def _(v: tuple):
 @to_numpy.register
 def _(v: np.ndarray):
     return v
+
+
+@pyro.poutine.runtime.effectful(type="interpolate_solution")
+def interpolate_solution(sol, tspan):
+    return sol(tspan)
 
 
 @singledispatch
@@ -132,8 +137,9 @@ def pre_broadcast_initial_state(
     return broadcasted_initial_state
 
 
+@singledispatch
 def diffeqdotjl_compile_problem(
-    dynamics: PureDynamics[np.ndarray],
+    dynamics,  #: PureDynamics[np.ndarray],
     initial_state: State[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
@@ -391,7 +397,7 @@ def _diffeqdotjl_ode_simulate_inner(
         jl.seval("augmented_tspan = vcat(tspan, inner_end_t)")
         augmented_tspan = jl.augmented_tspan
 
-        inner_flat_traj: juliacall.ArrayValue = sol(augmented_tspan)
+        inner_flat_traj: juliacall.ArrayValue = interpolate_solution(sol, augmented_tspan)
 
         # We now need to
         # 1) fully flatten the traj

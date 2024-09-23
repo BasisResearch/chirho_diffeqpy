@@ -13,5 +13,5 @@ from .load_julia_env import load_julia_env as _load_julia_env  # noqa: F401, E40
 #  different versions and julia dependency exposure.
 _load_julia_env()
 
-from .handlers import DiffEqPy  # noqa: F401, E402
+from .handlers import DiffEqPy, ODEProblemWrapper, LogAtExtraDomains  # noqa: F401, E402
 from .internals import ATempParams, PureDynamics  # noqa: F401, E402

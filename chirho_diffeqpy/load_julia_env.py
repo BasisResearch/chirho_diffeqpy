@@ -46,7 +46,11 @@ def load_and_pin_julia_packages(**names_versions):
     # Must be loaded after `_ensure_julia_installed()`
     from juliacall import Main as jl
 
-    return jl.seval(script), jl
+    return dict(zip(names_versions.keys(), jl.seval(script))), jl
+
+
+LOADED_PACKAGES = dict()
+_LOADED_ENV_PTR = [None]
 
 
 def load_julia_env():
@@ -54,16 +58,25 @@ def load_julia_env():
     #  three dependencies.
     # Note that load_julia_packages also activates a Pkg environment with this stuff in it.
 
-    _, jl = load_and_pin_julia_packages(
-        # Pinned to 7.11.0, as later versions introduce breaking changes. FIXME resolve
-        DifferentialEquations="7.11.0",
-        ModelingToolkit=None,
-        PythonCall=None,
-        Symbolics=None,
-        ForwardDiff=None,
-        SymbolicUtils=None,
-        LinearSolve="2.22.1",
-        BandedMatrices="1.7.3",
-    )
+    if _LOADED_ENV_PTR[0] is None:
+        loaded_packages, jl = load_and_pin_julia_packages(
+            # Pinned to 7.11.0, as later versions introduce breaking changes. FIXME resolve
+            DifferentialEquations="7.11.0",
+            ModelingToolkit=None,
+            PythonCall=None,
+            Symbolics=None,
+            ForwardDiff=None,
+            SymbolicUtils=None,
+            LinearSolve="2.22.1",
+            BandedMatrices="1.7.3",
+            # PDE stuff.
+            OrdinaryDiffEq=None,
+            MethodOfLines=None,
+            DomainSets=None
+        )
 
-    return jl
+        LOADED_PACKAGES.clear()
+        LOADED_PACKAGES.update(loaded_packages)
+        _LOADED_ENV_PTR[0] = jl
+
+    return _LOADED_ENV_PTR[0]

@@ -4,7 +4,9 @@ from ..internals import (
     State,
     _flatten_mapping,
     get_mapping_shape,
-    pre_broadcast_initial_state
+    pre_broadcast_initial_state,
+    diffeqdotjl_compile_problem,
+    require_float64
 )
 import numpy as np
 
@@ -58,3 +60,21 @@ def _(dynamics: ODEProblemWrapper, initial_state: State, atemp_params: ATempPara
             f" that supports the relevant shape."
         )
     return initial_state
+
+
+@diffeqdotjl_compile_problem.register
+def diffeqdotjl_compile_problem(
+    dynamics: ODEProblemWrapper,
+    initial_state,
+    start_time,
+    end_time,
+    atemp_params,
+) -> de.ODEProblem:
+
+    # The problem is already provided directly by the user, so we don't need to construct or compile it here.
+
+    require_float64(initial_state)
+    require_float64(atemp_params)
+    require_float64(dict(start_time=start_time, end_time=end_time))
+
+    return dynamics.problem
