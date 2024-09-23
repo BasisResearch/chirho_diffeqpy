@@ -63,7 +63,7 @@ def load_julia_env():
         ForwardDiff=None,
         SymbolicUtils=None,
         LinearSolve="2.22.1",
-        BandedMatrices="1.7.3"
+        BandedMatrices="1.7.3",
     )
 
     return jl
