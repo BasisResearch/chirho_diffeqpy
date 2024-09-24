@@ -11,7 +11,7 @@ optional, but must be specified as key word arguments.
 ```python
 from diffeqpy import de
 from chirho_diffeqpy import DiffEqPy
-solver_instance = DiffEqPy(reltol=1e-6, abstol=1e-8, alg=de.Vern7())
+solver_instance = DiffEqPy(reltol=1e-6, abstol=1e-8, alg=de.Tsit5())
 ```
 
 

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("solver", [DiffEqPy])
 @pytest.mark.parametrize(
-    "alg", [None, de.Vern7(), de.AutoTsit5(de.Rosenbrock23()), "dont pass"]
+    "alg", [None, de.Vern7(), de.AutoTsit5(de.Rosenbrock23()), de.Tsit5(), "dont pass"]
 )
 @pytest.mark.parametrize(
     "lang_interop_backend", ["chirho_diffeqpy.lang_interop.julianumpy"]
