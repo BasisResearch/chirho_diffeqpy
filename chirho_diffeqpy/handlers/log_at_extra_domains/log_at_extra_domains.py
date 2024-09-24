@@ -37,6 +37,19 @@ class LogAtExtraDomains(Messenger):
 
     def _pyro_interpolate_solution(self, msg):
         sol, tspan = msg["args"]
+
+        # Everything greater than or equal to tspan[-1] needs to be set equal to tspan[-1]
+        # This is a hack required to make the PDE solution interpolation consistent with the ODE
+        #  solution interpolation, which returns the end state for every time greater than the terminal time
+        #  due to some event. Arguably, the PDE behavior, which errors on interpolations out of the solved
+        #  time range, is more correct, and outer code should be adjusted to its behavior (i.e. removing requested
+        #  times that fall after the solve's end time).
+        # Do this in julia directly to avoid python type conversion issues.
+        jl.tspan = tspan
+        jl.seval("end_t = tspan[end]")
+        jl.seval("tspan[tspan .>= end_t] .= end_t")
+        tspan = jl.tspan
+
         interpolation = sol(tspan, *self._logging_points)
 
         # Where K is the number of solution functions in the system (e.g. u, v, w for a PDE).
