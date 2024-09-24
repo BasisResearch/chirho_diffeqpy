@@ -406,27 +406,29 @@ def _diffeqdotjl_ode_simulate_inner(
         # This is required because JuliaFunction.apply only supports functions with single tensor outputs, and
         #  we need the end time returned here to a) differentiate wrt it and b) know what time vals we should be
         #  returning state for (e.g. not the ones that happen after termination)
-        jl.inner_flat_traj = inner_flat_traj
+        jl.inner_flat_traj = inner_flat_traj  # .shape == (state, time)
         jl.inner_end_t = inner_end_t
 
-        # inner_flat_flat_traj will be a vector of doubles or forward diff duals.
-        # inner_end_t will be a double or forward diff dual.
-        # cat them using native julia.
-        # julia uses column major ordering, but we'll be unflattening assuming row major, so invert the axes before
-        #  flattening.
-        jl.seval("row_major_perm = reverse(1:ndims(inner_flat_traj))")
-        jl.seval(
-            "inner_flat_flat_traj = vec(permutedims(inner_flat_traj, row_major_perm))"
-        )
+        print(f"inner_flat_traj.shape: {np.array(inner_flat_traj).shape}")
+
+        # python-side we'll unpack assuming row-major ordering, which means we need to flatten transposed,
+        #  because julia is column-major.
+        jl.seval("inner_flat_flat_traj = vec(permutedims(inner_flat_traj, (2, 1)))")
         jl.seval("out_jl = vcat(inner_flat_flat_traj, inner_end_t)")
+
+        print(f"jl.out_jl.shape: {np.array(jl.out_jl).shape}")
 
         return jl.out_jl
 
     # Finally, execute the juliacall function
     solve_result = JuliaFunction.apply(inner_solve, outer_u0_t_p)
+    assert solve_result.ndim == 1, "Internal error: solve_result should be a vector."
+    print(f"solve_result.shape: {solve_result.shape}")
     # Extract out the concatenated return values.
-    flat_traj = solve_result[..., :-1]
+    flat_traj = solve_result[:-1]
     end_t = solve_result[-1]
+
+    print(f"flat_traj.shape: {flat_traj.shape}")
 
     # Unflatten the trajectory.
     # return _unflatten_state(flat_traj, initial_state, to_traj=True)

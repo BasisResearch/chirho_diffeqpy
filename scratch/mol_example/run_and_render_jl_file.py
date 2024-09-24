@@ -4,7 +4,7 @@ from pygments.formatters import HtmlFormatter
 from IPython.core.display import HTML
 
 
-def load_and_render_jl_file(jl, file_path: str):
+def run_and_render_jl_file(jl, file_path: str):
     assert file_path.endswith('.jl')
 
     with open(file_path, 'r') as file:
