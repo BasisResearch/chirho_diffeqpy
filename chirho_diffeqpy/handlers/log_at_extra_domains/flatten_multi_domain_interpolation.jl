@@ -3,7 +3,7 @@
 #  into an array of shape (T, K * X * Y * Z).
 
 
-function flatten_multi_domain_interpolation(interpolations::Vector{Array{Float64, N}}) where {N}
+function flatten_multi_domain_interpolation(interpolations::Vector{Array{U, N}}) where {U, N}
 
     # Start by just putting everything into a big array of shape (T, K, X, Y, Z) so that
     #  we can flatten it more easiliy with reshaping operations.
@@ -15,7 +15,7 @@ function flatten_multi_domain_interpolation(interpolations::Vector{Array{Float64
     spatial_shape = size(interpolations[1])[2:end]
 
     # Initialize the big array
-    big_array = zeros(T, K, spatial_shape...)
+    big_array = zeros(U, T, K, spatial_shape...)
 
     # Fill the big array
     colons = ntuple(_ -> Colon(), length(spatial_shape))
@@ -30,7 +30,10 @@ function flatten_multi_domain_interpolation(interpolations::Vector{Array{Float64
     #  and then unflatten into (state, time) on python side.
     # So here, we need to permute all but time, so that the outer code can handle the
     #  (state, time) unflatten, and this code can handle the unflattenability of the other dims.
-    println("Andy fix the column-major row-major reshaping issues here.")
+    # So, if K is not 1, or length(spatial_shape) > 1, we need to raise a not implemented error.
+    if K > 1 || length(spatial_shape) > 1
+        error("Solution interpolation is not yet implemented for multiple solutions or more than one non-time dimension.")
+    end
 
     # Now flatten the big array and return, and transpose, because the standard ODE solves
     #  return (state, time) shapes, despite time-first multi-domain settings returning (time, ...)

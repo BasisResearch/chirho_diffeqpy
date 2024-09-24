@@ -238,7 +238,10 @@ def _lazily_compile_event_fn_callback(
 
 
 def get_var_order(mapping: Mapping[str, Union[Tnsr, np.ndarray]]) -> Tuple[str, ...]:
-    return _var_order(frozenset(mapping.keys()))
+    # Maintain the order of the variables in the mapping.
+    # TODO just remove this var_order stuff b/c we're only supporting versions of python that have ordered dicts
+    #  by default.
+    return tuple(mapping.keys())
 
 
 # Single dispatch cat thing that handles both tensors and numpy arrays.
