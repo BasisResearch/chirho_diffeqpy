@@ -71,7 +71,8 @@ def load_julia_env():
             # PDE stuff.
             OrdinaryDiffEq=None,
             MethodOfLines=None,
-            DomainSets=None
+            DomainSets=None,
+            Interpolations=None
         )
 
         LOADED_PACKAGES.clear()
