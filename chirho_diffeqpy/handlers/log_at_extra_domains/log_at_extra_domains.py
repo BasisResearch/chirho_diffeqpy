@@ -52,6 +52,8 @@ class LogAtExtraDomains(Messenger):
 
         interpolation = sol(jl.tspan, *self._logging_points)
 
+        # TODO describe why you don't actually need self._logging_points
+
         # Where K is the number of solution functions in the system (e.g. u, v, w for a PDE).
         # .shape == (K * prod(len(lp) for lp in self._logging_points), T)
         flat_interpolation = flatten_multi_domain_interpolation(interpolation)
